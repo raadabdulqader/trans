@@ -79,18 +79,43 @@ export const CollapsibleTrigger: React.FC<CollapsibleTriggerProps> = ({
   children,
   className = "",
   onClick,
+  asChild = false,
   ...props
 }) => {
   const { toggle, disabled, isOpen } = useCollapsible();
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    onClick?.(e);
+    toggle();
+  };
+
+  if (asChild && React.isValidElement(children)) {
+    const child = children as React.ReactElement<{
+      onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+      className?: string;
+      disabled?: boolean;
+      'data-state'?: string;
+      'aria-expanded'?: boolean;
+    }>;
+
+    return React.cloneElement(child, {
+      ...props,
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+        child.props.onClick?.(e);
+        handleClick(e);
+      },
+      'data-state': isOpen ? "open" : "closed",
+      'aria-expanded': isOpen,
+      disabled: disabled || child.props.disabled,
+      className: `${child.props.className || ''} ${className}`.trim(),
+    });
+  }
 
   return (
     <button
       type="button"
       disabled={disabled}
-      onClick={(e) => {
-        onClick?.(e);
-        toggle();
-      }}
+      onClick={handleClick}
       data-state={isOpen ? "open" : "closed"}
       aria-expanded={isOpen}
       className={className}
