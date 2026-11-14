@@ -1,0 +1,6 @@
+{
+  "name": "نظام التخليص الكمركي",
+  "description": "نظام متكامل لإدارة التخليص الكمركي، البوالص والمعاملات، الحاويات، حسابات المخلصين والسلف، الوصولات والأرشيف، والتقارير المالية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
