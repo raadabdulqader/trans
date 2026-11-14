@@ -1,0 +1,250 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model AppUser {
+  id          String    @id @default(cuid())
+  name        String
+  username    String    @unique
+  password    String?
+  email       String?
+  phone       String?
+  role        String    @default("employee")
+  roleTitle   String?
+  avatar      String?   @default("👤")
+  status      String    @default("active")
+  lastLogin   DateTime?
+  permissions Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  regNo        String?
+  contact      String?
+  phone        String?
+  email        String?
+  address      String?
+  companyId    String?       @default("both")
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  transactions Transaction[]
+  receipts     Receipt[]
+
+  @@map("customers")
+}
+
+model Employee {
+  id           String        @id @default(cuid())
+  name         String
+  phone        String?
+  idNo         String?
+  joinDate     String?
+  notes        String?
+  category     String?       @default("broker")
+  jobTitle     String?
+  baseSalary   Float?        @default(0)
+  department   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  transactions Transaction[]
+  receipts     Receipt[]
+
+  @@map("employees")
+}
+
+model TransportCompany {
+  id            String             @id @default(cuid())
+  name          String
+  contactPerson String?
+  phone         String?
+  address       String?
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  trips         BillTransportTrip[]
+
+  @@map("transport_companies")
+}
+
+model Transaction {
+  id                String              @id @default(cuid())
+  billNo            String              @unique
+  companyId         String?             @default("naqaa_basra")
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  employeeId        String
+  employee          Employee            @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  date              DateTime            @default(now())
+  goodsType         String
+  status            String              @default("pending")
+  currency          String              @default("IQD")
+  exchangeRate      Float?              @default(1500)
+  totalAmount       Float               @default(0)
+  initialPaid       Float               @default(0)
+  isMixedCurrency   Boolean             @default(false)
+  totalAmountUSD    Float?              @default(0)
+  initialPaidUSD    Float?              @default(0)
+  notes             String?
+  containers        Json?
+  agencyDocument    Json?
+  hasTransport      Boolean             @default(false)
+  transportDocument Json?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  cancelReason      String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  transportTrips    BillTransportTrip[]
+  receipts          Receipt[]
+
+  @@map("transactions")
+}
+
+model BillTransportTrip {
+  id                String           @id @default(cuid())
+  transactionId     String
+  transaction       Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  carrierId         String
+  carrier           TransportCompany @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  carrierName       String?
+  destination       String
+  truckCount        Int              @default(1)
+  driverName        String
+  truckPlateNo      String
+  driverPhone       String?
+  currency          String           @default("IQD")
+  carrierCost       Float            @default(0)
+  customerCharge    Float?           @default(0)
+  notes             String?
+  transportDocument Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@map("bill_transport_trips")
+}
+
+model Receipt {
+  id                 String       @id @default(cuid())
+  receiptNo          String       @unique
+  type               String
+  billId             String?
+  transaction        Transaction? @relation(fields: [billId], references: [id], onDelete: SetNull)
+  companyId          String?      @default("naqaa_basra")
+  customerId         String?
+  customer           Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  employeeId         String?
+  employee           Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  currency           String       @default("IQD")
+  exchangeRate       Float?       @default(1500)
+  amount             Float        @default(0)
+  date               DateTime     @default(now())
+  notes              String?
+  status             String       @default("active")
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancelReason       String?
+  attachment         Json?
+  hasCommission      Boolean      @default(false)
+  commissionAmount   Float?       @default(0)
+  commissionCurrency String?      @default("IQD")
+  commissionBearer   String?      @default("company")
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@map("receipts")
+}
+
+model TreasuryTransaction {
+  id                 String    @id @default(cuid())
+  voucherNo          String    @unique
+  companyId          String?   @default("naqaa_basra")
+  type               String
+  category           String
+  currency           String    @default("IQD")
+  exchangeRate       Float?    @default(1500)
+  amount             Float     @default(0)
+  swapTargetCurrency String?
+  swapTargetAmount   Float?
+  hasCommission      Boolean   @default(false)
+  commissionAmount   Float?    @default(0)
+  commissionCurrency String?   @default("IQD")
+  commissionBearer   String?   @default("company")
+  date               DateTime  @default(now())
+  partyName          String?   @default("")
+  description        String?   @default("")
+  relatedBillNo      String?
+  carrierId          String?
+  tripId             String?
+  subAccount         String?
+  period             String?
+  recordedBy         String?   @default("")
+  status             String    @default("active")
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancelReason       String?
+  attachment         Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("treasury_transactions")
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  name       String
+  size       Int
+  type       String
+  dataUrl    String   @db.Text
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@map("attachments")
+}
+
+model AuditLogEntry {
+  id              String   @id @default(cuid())
+  timestamp       DateTime @default(now())
+  userId          String
+  userName        String
+  userRole        String
+  action          String
+  entityType      String
+  entityId        String
+  entityReference String?
+  title           String?
+  details         String?
+  cancelReason    String?
+  financialImpact Json?
+  companyId       String?
+  severity        String?  @default("info")
+  ipAddress       String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

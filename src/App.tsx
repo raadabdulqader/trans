@@ -22,6 +22,8 @@ import {
   exportBackup, 
   getBillFinancials,
   getTreasuryFinancialSummary,
+  getEmployeeAdvances,
+  getCarrierFinancials,
   resetDatabase,
   loadSimulationData,
   formatCurrency,
@@ -70,15 +72,17 @@ import {
   BrokerStatementModal 
 } from './components/modals/BrokerFinancialModal';
 import { AccountExpenseModal, SubAccountType } from './components/modals/AccountExpenseModal';
-import { ConfirmDeleteModal, FinancialImpact } from './components/modals/ConfirmDeleteModal';
+import { ConfirmDeleteModal, FinancialImpact, BlockedReasonDetail } from './components/modals/ConfirmDeleteModal';
 import { VoidBillFinancialModal, VoidResolutionMode } from './components/modals/VoidBillFinancialModal';
 import { CalendarViewModal } from './components/modals/CalendarViewModal';
 import { ExchangeRateModal } from './components/modals/ExchangeRateModal';
+import { LoginPage } from './components/auth/LoginPage';
 
 // Treasury states
 
 export default function App() {
   const [data, setData] = useState(() => loadData());
+  const [isLoggedOut, setIsLoggedOut] = useState(false);
   const [activePage, setActivePage] = useState<string>('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -184,6 +188,8 @@ export default function App() {
       advances: number;
       receiptsCount: number;
     };
+    blockedReasonDetails?: BlockedReasonDetail[];
+    accountingAdvice?: string[];
     hasPermission: boolean;
     permissionNote?: string;
     onConfirm?: () => void;
@@ -226,6 +232,29 @@ export default function App() {
     });
   };
 
+  // Fetch initial state from PostgreSQL on server
+  useEffect(() => {
+    fetch('/api/state')
+      .then((res) => {
+        if (!res.ok) throw new Error('Server returned error status');
+        return res.json();
+      })
+      .then((serverData) => {
+        if (serverData && serverData.users && serverData.users.length > 0) {
+          setData((prev) => ({
+            ...prev,
+            ...serverData,
+            currentUser: prev.currentUser?.id
+              ? serverData.users.find((u: any) => u.id === prev.currentUser.id) || prev.currentUser
+              : serverData.currentUser || prev.currentUser,
+          }));
+        }
+      })
+      .catch((err) => {
+        console.info('Running with local state cache:', err?.message);
+      });
+  }, []);
+
   // Sync state to local storage
   useEffect(() => {
     saveData.customers(data.customers);
@@ -262,6 +291,13 @@ export default function App() {
       const updated = [newEntry, ...(prev.auditLogs || [])];
       return { ...prev, auditLogs: updated };
     });
+
+    // مزامنة سجل التدقيق بالخلفية مع قاعدة بيانات PostgreSQL
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_audit_log', payload: { log: newEntry } }),
+    }).catch(() => {});
   };
 
   // Pending/Issues count for notification badge
@@ -714,15 +750,69 @@ export default function App() {
   };
 
   const handleDeleteCustomer = (customer: Customer) => {
-    requestDelete({
-      title: 'حذف سجل الزبون',
+    // Check if customer has active bills or active receipts
+    const custBills = (data.transactions || []).filter(t => t.status !== 'cancelled' && t.customerId === customer.id);
+    const custReceipts = (data.receipts || []).filter(r => r.status !== 'cancelled' && r.customerId === customer.id);
+
+    if (custBills.length > 0 || custReceipts.length > 0) {
+      const blockedDetails: BlockedReasonDetail[] = [];
+      if (custBills.length > 0) {
+        blockedDetails.push({
+          label: 'بوالص كمركية مرتبطة بالزبون',
+          value: `${custBills.length} بوليصة نشطة`,
+          subValue: 'بوالص نشطة في النظام ولها حسابات وذمم مالية',
+          variant: 'amber',
+        });
+      }
+      if (custReceipts.length > 0) {
+        blockedDetails.push({
+          label: 'سندات ووصولات قبض من الزبون',
+          value: `${custReceipts.length} سند قبض`,
+          subValue: 'مقبوضات مقيدة بحساب صندوق الشركة',
+          variant: 'cyan',
+        });
+      }
+
+      setDeleteConfirmation({
+        isOpen: true,
+        mode: 'blocked',
+        title: 'قيد حماية محاسبي: منع حذف سجل الزبون',
+        itemName: `الزبون: ${customer.name} (${customer.phone || customer.contact || 'زبون تجاري'})`,
+        message: `وفقاً للأصول والمعايير المحاسبية المعتمدة، لا يمكن حذف سجل زبون مقيد باسمه بوالص كمركية جارية أو سندات قبض مالية بصندوق الشركة، وذلك لحماية الذمم المالية وسلامة كشوف الحسابات.`,
+        hasPermission: data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords,
+        blockedReasonDetails: blockedDetails,
+        accountingAdvice: [
+          'يجب تصفية كافة المعاملات والمستحقات المتبقية على الزبون قبل أي إجراء.',
+          'الاحتفاظ ببيانات الزبون كأرشيف تاريخي دائم يضمن سلامة القيود وكشوف المطابقة في أي وقت.',
+        ],
+      });
+      return;
+    }
+
+    const hasPerm = data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords;
+    setDeleteConfirmation({
+      isOpen: true,
+      mode: 'delete',
+      title: 'حذف سجل الزبون (بدون قيود مالية)',
       itemName: `الزبون: ${customer.name}`,
-      message: `هل أنت متأكد من حذف الزبون (${customer.name})؟`,
+      message: `هل أنت متأكد من حذف الزبون (${customer.name})؟ لا توجد أي بوالص أو وصولات مالية مرتبطة به في النظام.`,
+      hasPermission: hasPerm,
+      permissionNote: hasPerm
+        ? undefined
+        : `المستخدم الحالي (${data.currentUser.name} - ${data.currentUser.roleTitle}) لا يمتلك صلاحية الحذف.`,
       onConfirm: () => {
         setData(prev => ({
           ...prev,
           customers: prev.customers.filter(c => c.id !== customer.id),
         }));
+        addAuditLog({
+          action: 'delete',
+          entityType: 'customer',
+          entityId: customer.id,
+          entityReference: `زبون: ${customer.name}`,
+          title: 'حذف إداري لسجل زبون',
+          details: `تم الحذف الإداري لسجل الزبون (${customer.name}) الخالي من القيود المالية والبوالص.`,
+        });
         showToast('تم حذف الزبون بنجاح');
         setIsCustModalOpen(false);
       },
@@ -749,12 +839,118 @@ export default function App() {
 
   const handleDeleteEmployee = (emp: Employee) => {
     const roleLabel = emp.category === 'staff' ? 'موظف شركة' : emp.category === 'broker' ? 'مخلص كمركي' : 'موظف / مخلص كمركي';
-    requestDelete({
-      title: 'حذف سجل موظف أو مخلص',
+
+    // 1. Check active financial receipts & open advances
+    const empReceipts = (data.receipts || []).filter(r => r.status !== 'cancelled' && r.employeeId === emp.id);
+    const empAdvances = getEmployeeAdvances(emp.id, data.receipts || []);
+
+    // 2. Check active customs declarations / bills assigned to this broker/employee
+    const empBills = (data.transactions || []).filter(t => t.status !== 'cancelled' && t.employeeId === emp.id);
+
+    // 3. Check active treasury cashbox movements tied to this employee (salaries, advances, etc.)
+    const empTreasury = (data.treasury || []).filter(
+      t =>
+        t.status !== 'cancelled' &&
+        (t.partyName?.trim().toLowerCase() === emp.name.trim().toLowerCase() ||
+          t.description?.includes(emp.name))
+    );
+
+    const hasActiveFinancials =
+      empReceipts.length > 0 ||
+      empAdvances.openIQD > 0 ||
+      empAdvances.openUSD > 0 ||
+      empAdvances.advancesIQD > 0 ||
+      empAdvances.advancesUSD > 0 ||
+      empBills.length > 0 ||
+      empTreasury.length > 0;
+
+    if (hasActiveFinancials) {
+      const blockedDetails: BlockedReasonDetail[] = [];
+
+      if (empAdvances.openIQD > 0 || empAdvances.openUSD > 0) {
+        blockedDetails.push({
+          label: 'سلف مفتوحة بذمة المخلص (غير مسواة)',
+          value: `${formatCurrency(empAdvances.openIQD, 'IQD')}${empAdvances.openUSD > 0 ? ' + ' + formatCurrency(empAdvances.openUSD, 'USD') : ''}`,
+          subValue: 'أموال نقدية خرجت من الصندوق ولم تسوَّ بعد',
+          variant: 'rose',
+        });
+      }
+
+      if (empAdvances.advancesIQD > 0 || empAdvances.advancesUSD > 0) {
+        blockedDetails.push({
+          label: 'إجمالي السلف النقدية المنصرفة',
+          value: `${formatCurrency(empAdvances.advancesIQD, 'IQD')}${empAdvances.advancesUSD > 0 ? ' + ' + formatCurrency(empAdvances.advancesUSD, 'USD') : ''}`,
+          subValue: 'سندات سلف صادرة من صندوق الشركة',
+          variant: 'amber',
+        });
+      }
+
+      if (empReceipts.length > 0) {
+        blockedDetails.push({
+          label: 'سندات ووصولات مالية نشطة',
+          value: `${empReceipts.length} سند مالي`,
+          subValue: 'سلف نقدية وتسويات مصاريف تخليص',
+          variant: 'cyan',
+        });
+      }
+
+      if (empBills.length > 0) {
+        blockedDetails.push({
+          label: 'بوالص كمركية مسندة للمخلص',
+          value: `${empBills.length} بوليصة نشطة`,
+          subValue: 'بوالص قيد الإجراء أو مكتملة في النظام',
+          variant: 'emerald',
+        });
+      }
+
+      if (empTreasury.length > 0) {
+        blockedDetails.push({
+          label: 'قيود مدفوعات بصندوق الشركة',
+          value: `${empTreasury.length} قيد صندوق`,
+          subValue: 'سندات صرف أو رواتب مباشرة من الخزينة',
+          variant: 'default',
+        });
+      }
+
+      setDeleteConfirmation({
+        isOpen: true,
+        mode: 'blocked',
+        title: 'قيد حماية محاسبي: منع حذف المخلص / الموظف',
+        itemName: `${roleLabel}: ${emp.name} (${emp.jobTitle || 'تخليص كمركي'})`,
+        message: `وفقاً للأصول والمعايير المحاسبية المعتمدة، لا يمكن حذف سجل مخلص كمركي أو موظف ارتبطت بذمته بوالص جارية أو وصولات سلف وأموال نقدية من صندوق الشركة. حذف السجل يؤدي إلى ضياع تسلسل القيود واختلال كشوفات الحسابات وميزان الصندوق.`,
+        hasPermission: data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords,
+        blockedReasonDetails: blockedDetails,
+        accountingAdvice: [
+          'تصفية وتسوية سلف المخلص الكمركي دفترياً بالكامل من تبويب "المخلصين" قبل اتخاذ أي إجراء.',
+          'إعادة إسناد البوالص الكمركية الجارية إلى مخلص كمركي آخر لضمان استمرارية العمليات.',
+          'الاحتفاظ بسجل المخلص في النظام كأرشيف تاريخي دائم لضمان صحة التدقيق المالي وكشوفات الحساب.',
+        ],
+      });
+      return;
+    }
+
+    // If completely free from any financial or operational links:
+    const hasPerm = data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords;
+    setDeleteConfirmation({
+      isOpen: true,
+      mode: 'delete',
+      title: 'حذف سجل موظف أو مخلص (بدون قيود مالية)',
       itemName: `${roleLabel}: ${emp.name}`,
-      message: `هل أنت متأكد من حذف ${roleLabel} (${emp.name})؟ سيتم حذف بياناته وسجلاته المباشرة.`,
+      message: `هل أنت متأكد من حذف ${roleLabel} (${emp.name})؟ لا توجد أي بوالص أو قيود مالية أو سلف مرتبطة به.`,
+      hasPermission: hasPerm,
+      permissionNote: hasPerm
+        ? undefined
+        : `المستخدم الحالي (${data.currentUser.name} - ${data.currentUser.roleTitle}) لا يمتلك صلاحية الحذف.`,
       onConfirm: () => {
         setData(prev => ({ ...prev, employees: prev.employees.filter(e => e.id !== emp.id) }));
+        addAuditLog({
+          action: 'delete',
+          entityType: 'employee',
+          entityId: emp.id,
+          entityReference: `${roleLabel}: ${emp.name}`,
+          title: 'حذف إداري لسجل موظف / مخلص',
+          details: `تم الحذف الإداري لسجل (${emp.name}) الخالي من القيود المالية والبوالص.`,
+        });
         showToast('تم حذف السجل بنجاح');
         setIsEmpModalOpen(false);
       },
@@ -884,23 +1080,6 @@ export default function App() {
           },
         });
         showToast(`تم إلغاء السند (${rcpt.receiptNo}) دفترياً وتعديل أثر الصندوق والحسابات`);
-        setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
-      },
-      onConfirm: () => {
-        // Fallback hard delete (for administrative manual purge)
-        setData(prev => ({
-          ...prev,
-          receipts: prev.receipts.filter(r => r.id !== rcpt.id),
-        }));
-        addAuditLog({
-          action: 'delete',
-          entityType: 'receipt',
-          entityId: rcpt.id,
-          entityReference: `سند ${rcpt.receiptNo}`,
-          title: 'حذف إداري نهائي لسند مالي',
-          details: `تم الحذف الإداري النهائي للسند (${rcpt.receiptNo}) بمبلغ (${formatCurrency(rcpt.amount)}).`,
-        });
-        showToast(`تم حذف السند (${rcpt.receiptNo}) نهائياً`);
         setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
       },
     });
@@ -1283,25 +1462,6 @@ export default function App() {
         setIsTreasuryModalOpen(false);
         setIsAccountExpenseOpen(false);
       },
-      onConfirm: () => {
-        // Administrative hard delete
-        setData(prev => ({
-          ...prev,
-          treasury: (prev.treasury || []).filter(t => t.id !== tx.id),
-        }));
-        addAuditLog({
-          action: 'delete',
-          entityType: 'treasury',
-          entityId: tx.id,
-          entityReference: `قيد ${tx.voucherNo}`,
-          title: 'حذف إداري نهائي لقيد بالصندوق',
-          details: `تم الحذف الإداري النهائي لقيد الصندوق (${tx.voucherNo}) بمبلغ (${formatCurrency(tx.amount)}).`,
-        });
-        showToast('تم حذف قيد الصندوق نهائياً');
-        setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
-        setIsTreasuryModalOpen(false);
-        setIsAccountExpenseOpen(false);
-      },
     });
   };
 
@@ -1591,16 +1751,105 @@ export default function App() {
   };
 
   const handleDeleteCarrier = (carrier: TransportCompany) => {
-    requestDelete({
-      title: 'حذف شركة نقل',
+    const carrierFin = getCarrierFinancials(
+      carrier,
+      data.transactions,
+      data.treasury || [],
+      data.exchangeRate || 1500
+    );
+
+    const hasActiveFinancials =
+      carrierFin.trips.length > 0 ||
+      carrierFin.activePayments.length > 0 ||
+      carrierFin.paidIQD > 0 ||
+      carrierFin.paidUSD > 0 ||
+      carrierFin.totalCostIQD > 0 ||
+      carrierFin.totalCostUSD > 0 ||
+      carrierFin.remainingIQD > 0 ||
+      carrierFin.remainingUSD > 0;
+
+    if (hasActiveFinancials) {
+      const blockedDetails: BlockedReasonDetail[] = [];
+
+      if (carrierFin.trips.length > 0) {
+        blockedDetails.push({
+          label: 'نقلات شحن نشطة بالبوالص',
+          value: `${carrierFin.trips.length} نقلة (${carrierFin.billsCount} بوليصة)`,
+          subValue: `إجمالي الشاحنات: ${carrierFin.totalTrucksCount} شاحنة`,
+          variant: 'amber',
+        });
+      }
+
+      if (carrierFin.paidIQD > 0 || carrierFin.paidUSD > 0) {
+        blockedDetails.push({
+          label: 'مبالغ مصروفة من صندوق الشركة',
+          value: `${formatCurrency(carrierFin.paidIQD, 'IQD')}${carrierFin.paidUSD > 0 ? ' + ' + formatCurrency(carrierFin.paidUSD, 'USD') : ''}`,
+          subValue: `${carrierFin.activePayments.length} سند صرف نقدي`,
+          variant: 'cyan',
+        });
+      }
+
+      if (carrierFin.totalCostIQD > 0 || carrierFin.totalCostUSD > 0) {
+        blockedDetails.push({
+          label: 'إجمالي استحقاقات النقل المقيدة',
+          value: `${formatCurrency(carrierFin.totalCostIQD, 'IQD')}${carrierFin.totalCostUSD > 0 ? ' + ' + formatCurrency(carrierFin.totalCostUSD, 'USD') : ''}`,
+          subValue: 'تكاليف تشغيلية مقيدة بالبوالص',
+          variant: 'default',
+        });
+      }
+
+      if (carrierFin.remainingIQD > 0 || carrierFin.remainingUSD > 0) {
+        blockedDetails.push({
+          label: 'متبقي ذمة مستحقة للناقل',
+          value: `${formatCurrency(carrierFin.remainingIQD, 'IQD')}${carrierFin.remainingUSD > 0 ? ' + ' + formatCurrency(carrierFin.remainingUSD, 'USD') : ''}`,
+          subValue: 'التزام مالي قائم لم يُسدد بعد',
+          variant: 'rose',
+        });
+      }
+
+      setDeleteConfirmation({
+        isOpen: true,
+        mode: 'blocked',
+        title: 'قيد حماية محاسبي: منع حذف شركة النقل',
+        itemName: `شركة النقل: ${carrier.name} (${carrier.phone || 'بدون هاتف'})`,
+        message: `وفقاً للأصول والمعايير المحاسبية المعتمدة، يمنع منعاً باتاً حذف شركة نقل مسجل لها أجور نقل في البوالص الكمركية أو صدرت لها سندات صرف نقدية من صندوق الشركة. حذف السجل سيؤدي لانهيار شجرة الحسابات وفقدان كشف حساب الناقل وسندات الصرف.`,
+        hasPermission: data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords,
+        blockedReasonDetails: blockedDetails,
+        accountingAdvice: [
+          'في حال كانت النقلات مسجلة بالخطأ، يمكن مسح النقلة من البوليصة المعنية وستُرد المبالغ تلقائياً للصندوق.',
+          'في حال وجود سند صرف خاطئ، يتم إلغاؤه دفترياً (Void) من الصندوق ليعود المبلغ لرصيد الخزينة فوراً.',
+          'الاحتفاظ بشركة النقل في النظام كأرشيف تاريخي دائم يتيح استخراج كشوفات الحساب وسندات النقل ومطابقات الجرد في أي وقت.',
+        ],
+      });
+      return;
+    }
+
+    // If completely free from any trips or treasury payments:
+    const hasPerm = data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords;
+    setDeleteConfirmation({
+      isOpen: true,
+      mode: 'delete',
+      title: 'حذف شركة نقل (بدون قيود مالية)',
       itemName: carrier.name,
-      message: `هل أنت متأكد من حذف شركة النقل "${carrier.name}" من السجل؟`,
+      message: `هل أنت متأكد من حذف شركة النقل "${carrier.name}"؟ لا توجد أي نقلات كمركية أو سندات صرف مرتبطة بها.`,
+      hasPermission: hasPerm,
+      permissionNote: hasPerm
+        ? undefined
+        : `المستخدم الحالي (${data.currentUser.name} - ${data.currentUser.roleTitle}) لا يمتلك صلاحية الحذف.`,
       onConfirm: () => {
         setData(prev => ({
           ...prev,
           carriers: (prev.carriers || []).filter(c => c.id !== carrier.id),
         }));
-        showToast('تم حذف شركة النقل');
+        addAuditLog({
+          action: 'delete',
+          entityType: 'carrier',
+          entityId: carrier.id,
+          entityReference: `شركة نقل: ${carrier.name}`,
+          title: 'حذف إداري لشركة نقل',
+          details: `تم الحذف الإداري لشركة النقل (${carrier.name}) الخالية من الحركات والقيود المالية.`,
+        });
+        showToast('تم حذف شركة النقل بنجاح');
       },
     });
   };
@@ -1725,6 +1974,19 @@ export default function App() {
     }
   };
 
+  if (isLoggedOut) {
+    return (
+      <LoginPage
+        users={data.users}
+        onLoginSuccess={(user, branch) => {
+          handleSwitchUser(user);
+          setIsLoggedOut(false);
+        }}
+        onCancel={() => setIsLoggedOut(false)}
+      />
+    );
+  }
+
   return (
     <div dir="rtl" className="min-h-screen bg-slate-950 text-slate-100 flex font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
       
@@ -1770,6 +2032,7 @@ export default function App() {
             setActivePage('transactions');
           }}
           onOpenCalendar={() => setIsCalendarOpen(true)}
+          onLogout={() => setIsLoggedOut(true)}
         />
 
         {/* Views */}
@@ -2375,6 +2638,7 @@ export default function App() {
         currentUser={data.currentUser}
         onClose={() => setIsSwitchUserOpen(false)}
         onSelectUser={handleSwitchUser}
+        onGoToLoginPage={() => setIsLoggedOut(true)}
       />
 
       {/* Print Document Modal */}
@@ -2513,6 +2777,8 @@ export default function App() {
         message={deleteConfirmation.message}
         financialImpact={deleteConfirmation.financialImpact}
         activeFinancialsWarning={deleteConfirmation.activeFinancialsWarning}
+        blockedReasonDetails={deleteConfirmation.blockedReasonDetails}
+        accountingAdvice={deleteConfirmation.accountingAdvice}
         hasPermission={deleteConfirmation.hasPermission}
         permissionNote={deleteConfirmation.permissionNote}
         onClose={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}

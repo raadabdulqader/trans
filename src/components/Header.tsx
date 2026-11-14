@@ -1,6 +1,6 @@
 'use client';
 
-import { Menu, Search, Download, Upload, Bell, ChevronDown, RotateCcw, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
+import { Menu, Search, Download, Upload, Bell, ChevronDown, RotateCcw, Calendar as CalendarIcon, DollarSign, LogOut } from 'lucide-react';
 import { AppUser } from '../types/customs';
 
 interface HeaderProps {
@@ -18,6 +18,7 @@ interface HeaderProps {
   onToggleMobileMenu: () => void;
   onNotificationClick: () => void;
   onOpenCalendar?: () => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMobileMenu,
   onNotificationClick,
   onOpenCalendar,
+  onLogout,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 py-3.5">
@@ -163,6 +165,17 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
+
+          {/* Logout Button */}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="تسجيل الخروج والانتقال لصفحة الدخول"
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700/80 hover:border-rose-500/30 transition flex items-center justify-center"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </header>

@@ -10,6 +10,7 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://trans.mdd-iq.com'),
   title: 'نظام مكتب النجم للتخليص الكمركي والمالية',
   description: 'نظام متكامل لإدارة التخليص الكمركي، البوالص والمعاملات، الحاويات، حسابات المخلصين والسلف، الوصولات والأرشيف، والتقارير المالية',
 };

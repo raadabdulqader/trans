@@ -8,6 +8,7 @@ export interface SwitchUserModalProps {
   currentUser: AppUser;
   onClose: () => void;
   onSelectUser: (user: AppUser) => void;
+  onGoToLoginPage?: () => void;
 }
 
 export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
@@ -16,6 +17,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
   currentUser,
   onClose,
   onSelectUser,
+  onGoToLoginPage,
 }) => {
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
@@ -215,7 +217,19 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
           )}
         </div>
 
-        <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end">
+        <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+          {onGoToLoginPage ? (
+            <button
+              onClick={() => {
+                onClose();
+                onGoToLoginPage();
+              }}
+              className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold hover:underline flex items-center gap-1.5"
+            >
+              <span>فتح صفحة تسجيل الدخول الكاملة</span>
+              <span>←</span>
+            </button>
+          ) : <div />}
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition text-xs"

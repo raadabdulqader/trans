@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
   // Treat pdfjs-dist as an external package for server bundles
   serverExternalPackages: ['pdfjs-dist'],
   webpack: (config, { isServer }) => {
