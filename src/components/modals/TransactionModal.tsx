@@ -11,7 +11,7 @@ import {
   Paperclip,
   Truck
 } from 'lucide-react';
-import { Transaction, Customer, Employee, Receipt, CompanyId, COMPANIES, Currency, TreasuryAttachment, TransportCompany, BillTransportTrip } from '../../types/customs';
+import { Transaction, Customer, Employee, Receipt, CompanyId, COMPANIES, Currency, TreasuryAttachment, TransportCompany, BillTransportTrip, TreasuryTransaction } from '../../types/customs';
 import { getBillFinancials, normalizeExchangeRate, formatCurrency } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
 import { ContainersEditor } from '../transactions/ContainersEditor';
@@ -27,6 +27,7 @@ interface TransactionModalProps {
   carriers?: TransportCompany[];
   onQuickAddCarrier?: (carrier: Omit<TransportCompany, 'id' | 'createdAt'>) => TransportCompany;
   receipts?: Receipt[];
+  treasury?: TreasuryTransaction[];
   exchangeRate?: number;
   onExchangeRateChange?: (newRate: number, silent?: boolean) => void;
   onViewArchive?: (attachment: TreasuryAttachment, title?: string) => void;
@@ -43,6 +44,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   carriers = [],
   onQuickAddCarrier,
   receipts = [],
+  treasury = [],
   exchangeRate = 1500,
   onExchangeRateChange,
   onViewArchive,
@@ -164,6 +166,27 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const isTotalLessThanExisting = existingPayments > 0 && totalAmount < (existingPayments + Math.min(totalAmount, initialPaid));
   const remaining = Math.max(0, Math.round((totalAmount - Math.min(totalAmount, initialPaid) - existingPayments) * 100) / 100);
   const remainingUSD = Math.max(0, totalAmountUSD - Math.min(totalAmountUSD, initialPaidUSD));
+
+  // Check if there are active carrier payments disbursed from treasury on this bill
+  const activeCarrierPaymentsOnBill = (treasury || []).filter(
+    t =>
+      t.status !== 'cancelled' &&
+      t.type === 'withdrawal' &&
+      (t.carrierId || t.subAccount === 'carriers') &&
+      t.relatedBillNo &&
+      initialData &&
+      t.relatedBillNo.trim().toLowerCase() === initialData.billNo.trim().toLowerCase()
+  );
+
+  const carrierPaidIQDOnBill = activeCarrierPaymentsOnBill
+    .filter(t => (t.currency || 'IQD') === 'IQD')
+    .reduce((s, t) => s + (t.amount || 0), 0);
+
+  const carrierPaidUSDOnBill = activeCarrierPaymentsOnBill
+    .filter(t => t.currency === 'USD')
+    .reduce((s, t) => s + (t.amount || 0), 0);
+
+  const hasPaidCarriersOnBill = carrierPaidIQDOnBill > 0 || carrierPaidUSDOnBill > 0;
 
   const handleGenerateNewBillNo = () => {
     const randomBill = `BL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -819,6 +842,26 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Notice if transport is cleared while payments exist */}
+            {hasPaidCarriersOnBill && (!hasTransport || transportTrips.length === 0) && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-xs flex items-start gap-3 animate-in fade-in">
+                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-amber-300 text-sm">
+                    تنبيه محاسبي: انعكاس استرداد أجور النقل إلى الصندوق
+                  </div>
+                  <div className="text-slate-300 leading-relaxed text-[11px]">
+                    تم مسح / إلغاء نقلات وشاحنات هذه البوليصة، وتوجد دفعات أجور نقل مسددة للنواقل سابقاً من الصندوق بقيمة{' '}
+                    <strong className="text-emerald-400 font-mono">
+                      {carrierPaidIQDOnBill > 0 ? formatCurrency(carrierPaidIQDOnBill, 'IQD') : ''}
+                      {carrierPaidUSDOnBill > 0 ? `${carrierPaidIQDOnBill > 0 ? ' + ' : ''}${formatCurrency(carrierPaidUSDOnBill, 'USD')}` : ''}
+                    </strong>.
+                    عند حفظ البوليصة الآن، سيقوم النظام تلقائياً بإلغاء سندات الصرف دفترياً وإعادة كامل المبالغ فوراً إلى رصيد الصندوق.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Subcomponent 4: Land Transport Trips Section */}
             <BillTransportSection
