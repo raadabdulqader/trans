@@ -52,6 +52,7 @@ export const VoidBillFinancialModal: React.FC<VoidBillFinancialModalProps> = ({
   customers,
   employees,
   receipts,
+  treasury = [],
   currentUser,
   onClose,
   onConfirmVoid,
