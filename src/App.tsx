@@ -240,7 +240,7 @@ export default function App() {
         return res.json();
       })
       .then((serverData) => {
-        if (serverData && serverData.users && serverData.users.length > 0) {
+        if (serverData && !serverData.offline && serverData.users && serverData.users.length > 0) {
           setData((prev) => ({
             ...prev,
             ...serverData,

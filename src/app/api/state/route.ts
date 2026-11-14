@@ -14,7 +14,37 @@ import { buildInitialAuditLogs, DEFAULT_EXCHANGE_RATE } from '@/utils/storage';
 
 export const dynamic = 'force-dynamic';
 
+let isDbAvailable: boolean | null = null;
+let lastCheckTime = 0;
+
+async function checkDbConnection(): Promise<boolean> {
+  const now = Date.now();
+  if (isDbAvailable !== null && now - lastCheckTime < 60000) {
+    return isDbAvailable;
+  }
+  try {
+    const connectPromise = prisma.$queryRaw`SELECT 1`;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DB Timeout')), 1000)
+    );
+    await Promise.race([connectPromise, timeoutPromise]);
+    isDbAvailable = true;
+  } catch {
+    isDbAvailable = false;
+  }
+  lastCheckTime = now;
+  return isDbAvailable;
+}
+
 export async function GET() {
+  const dbOk = await checkDbConnection();
+  if (!dbOk) {
+    return NextResponse.json(
+      { offline: true, message: 'Database unreachable, operating in client-local mode' },
+      { status: 200 }
+    );
+  }
+
   try {
     // 1. التحقق إن كانت قاعدة البيانات جديدة وفارغة (التهيئة التلقائية)
     const usersCount = await prisma.appUser.count();
@@ -362,15 +392,23 @@ export async function GET() {
       exchangeRate,
     });
   } catch (error: any) {
-    console.error('Error fetching state from PostgreSQL:', error);
+    // If PostgreSQL is unreachable, respond with offline status gracefully
     return NextResponse.json(
-      { error: error?.message || 'Failed to fetch database state' },
-      { status: 500 }
+      { offline: true, message: 'PostgreSQL offline, using client storage' },
+      { status: 200 }
     );
   }
 }
 
 export async function POST(req: Request) {
+  const dbOk = await checkDbConnection();
+  if (!dbOk) {
+    return NextResponse.json(
+      { success: true, offline: true, message: 'Database unreachable, operating in client-local mode' },
+      { status: 200 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { action, payload } = body;
@@ -412,10 +450,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Error updating database:', error);
+    // Graceful offline fallback
     return NextResponse.json(
-      { error: error?.message || 'Failed to update database' },
-      { status: 500 }
+      { success: false, offline: true, message: 'PostgreSQL offline, state stored in browser' },
+      { status: 200 }
     );
   }
 }
