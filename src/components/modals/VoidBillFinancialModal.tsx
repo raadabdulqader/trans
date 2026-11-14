@@ -16,7 +16,7 @@ import {
   HelpCircle,
   Sparkles
 } from 'lucide-react';
-import { Transaction, Customer, Employee, Receipt, AppUser, CompanyId, COMPANIES } from '../../types/customs';
+import { Transaction, Customer, Employee, Receipt, AppUser, CompanyId, COMPANIES, TreasuryTransaction } from '../../types/customs';
 import { formatCurrency, getBillFinancials } from '../../utils/storage';
 
 export type VoidResolutionMode = 'void_and_refund' | 'credit_customer' | 'void_bill_only';
@@ -27,6 +27,7 @@ export interface VoidBillFinancialModalProps {
   customers: Customer[];
   employees: Employee[];
   receipts: Receipt[];
+  treasury?: TreasuryTransaction[];
   currentUser: AppUser;
   onClose: () => void;
   onConfirmVoid: (
@@ -82,9 +83,20 @@ export const VoidBillFinancialModal: React.FC<VoidBillFinancialModalProps> = ({
   const settledAdvances = fin.totalSettled;  // Settled customs broker receipts
   const totalAdvances = fin.totalAdvances;
 
+  // Active carrier payments linked to this bill
+  const carrierPaymentsOnBill = (treasury || []).filter(
+    t =>
+      t.status !== 'cancelled' &&
+      t.type === 'withdrawal' &&
+      (t.carrierId || t.subAccount === 'carriers') &&
+      t.relatedBillNo &&
+      t.relatedBillNo.trim().toLowerCase() === transaction.billNo.trim().toLowerCase()
+  );
+  const carrierPaidOnBill = carrierPaymentsOnBill.reduce((s, t) => s + (t.amount || 0), 0);
+
   // Net Cashbox Impact for Option 1:
-  // Refund customer collections (-totalCollected) + Recover open advances (+openAdvances)
-  const netCashboxImpactOption1 = -totalCollected + openAdvances;
+  // Refund customer collections (-totalCollected) + Recover open advances (+openAdvances) + Recover carrier payments (+carrierPaidOnBill)
+  const netCashboxImpactOption1 = -totalCollected + openAdvances + carrierPaidOnBill;
 
   const handleConfirm = () => {
     const finalReason = reason.trim() || 'إلغاء دفتري محاسبي للبوليصة وتحديث الصندوق';
@@ -198,7 +210,7 @@ export const VoidBillFinancialModal: React.FC<VoidBillFinancialModalProps> = ({
               </div>
 
               <p className="text-[11px] text-slate-300 pr-6 leading-relaxed">
-                يتم إلغاء وصولات القبض والدفعة الأولى المرتبطة بالبوليصة دفترياً، واستبعاد <strong className="text-emerald-300 font-mono" dir="ltr">{formatCurrency(totalCollected)}</strong> من إجمالي مقبوضات الصندوق (إرجاع للزبون)، مع استرداد السلف المفتوحة غير المصفاة بقيمة <strong className="text-amber-300 font-mono" dir="ltr">{formatCurrency(openAdvances)}</strong> إلى الصندوق.
+                يتم إلغاء وصولات القبض والدفعة الأولى المرتبطة بالبوليصة دفترياً، واستبعاد <strong className="text-emerald-300 font-mono" dir="ltr">{formatCurrency(totalCollected)}</strong> من إجمالي مقبوضات الصندوق (إرجاع للزبون)، مع استرداد السلف المفتوحة غير المصفاة بقيمة <strong className="text-amber-300 font-mono" dir="ltr">{formatCurrency(openAdvances)}</strong>{carrierPaidOnBill > 0 ? ` واسترداد أجور النقل المسددة للناقل بقيمة ${formatCurrency(carrierPaidOnBill)}` : ''} إلى الصندوق.
               </p>
 
               {resolution === 'void_and_refund' && (

@@ -369,11 +369,39 @@ export default function App() {
       showToast(`تم تحويل حالة البوليصة (${tx.billNo}) إلى ملغاة دفترياً`);
     }
 
+    const carrierPaymentsToCancel = resolution === 'void_and_refund'
+      ? (data.treasury || []).filter(
+          t =>
+            t.status !== 'cancelled' &&
+            t.type === 'withdrawal' &&
+            (t.carrierId || t.subAccount === 'carriers') &&
+            t.relatedBillNo &&
+            t.relatedBillNo.trim().toLowerCase() === tx.billNo.trim().toLowerCase()
+        )
+      : [];
+
+    let updatedTreasury = data.treasury || [];
+    if (carrierPaymentsToCancel.length > 0) {
+      updatedTreasury = updatedTreasury.map(t => {
+        if (carrierPaymentsToCancel.some(p => p.id === t.id)) {
+          return {
+            ...t,
+            status: 'cancelled' as const,
+            cancelledAt: new Date().toISOString(),
+            cancelledBy: data.currentUser.name,
+            cancelReason: `إلغاء سند صرف أجور النقل واسترداد المبلغ للصندوق تلقائياً مع إلغاء البوليصة (${tx.billNo}): ${reason}`,
+          };
+        }
+        return t;
+      });
+    }
+
     const updatedTransactions = data.transactions.map(t => t.id === tx.id ? updatedTx : t);
     setData(prev => ({
       ...prev,
       transactions: updatedTransactions,
       receipts: updatedReceipts,
+      treasury: updatedTreasury,
     }));
 
     addAuditLog({
@@ -413,6 +441,7 @@ export default function App() {
     };
 
     if (safeTxData.id) {
+      const oldTx = data.transactions.find(t => t.id === safeTxData.id);
       const updated = data.transactions.map(t => t.id === safeTxData.id ? { ...t, ...safeTxData } : t);
       const txCurr = safeTxData.currency || 'IQD';
       const hasDepositReceipt = data.receipts.some(r => r.billId === safeTxData.id && r.type === 'deposit');
@@ -448,7 +477,89 @@ export default function App() {
           ...updatedReceipts,
         ];
       }
-      setData(prev => ({ ...prev, transactions: updated, receipts: updatedReceipts }));
+
+      // Check if transport trips were removed/deleted and refund carrier payments to treasury
+      const activeCarrierPaymentsForBill = (data.treasury || []).filter(
+        t =>
+          t.status !== 'cancelled' &&
+          t.type === 'withdrawal' &&
+          (t.carrierId || t.subAccount === 'carriers') &&
+          t.relatedBillNo &&
+          oldTx &&
+          t.relatedBillNo.trim().toLowerCase() === oldTx.billNo.trim().toLowerCase()
+      );
+
+      const oldTrips = oldTx?.transportTrips || [];
+      const newTrips = safeTxData.transportTrips || [];
+
+      let paymentsToCancel: TreasuryTransaction[] = [];
+      if (oldTrips.length > 0 && activeCarrierPaymentsForBill.length > 0) {
+        if (!safeTxData.hasTransport || newTrips.length === 0) {
+          // All transport trips removed from this bill
+          paymentsToCancel = activeCarrierPaymentsForBill;
+        } else {
+          // Specific carrier trips removed or cleared
+          paymentsToCancel = activeCarrierPaymentsForBill.filter(pmt => {
+            const carrierStillHasTrip = newTrips.some(
+              trip =>
+                (pmt.carrierId && trip.carrierId === pmt.carrierId) ||
+                (!pmt.carrierId && trip.carrierName === pmt.partyName)
+            );
+            return !carrierStillHasTrip;
+          });
+        }
+      }
+
+      let updatedTreasury = data.treasury || [];
+      let refundNotice = '';
+
+      if (paymentsToCancel.length > 0) {
+        const cancelReason = `استرداد المبلغ للصندوق تلقائياً بسبب مسح مصاريف الشحن والنقل من البوليصة (${safeTxData.billNo})`;
+        updatedTreasury = updatedTreasury.map(t => {
+          if (paymentsToCancel.some(p => p.id === t.id)) {
+            return {
+              ...t,
+              status: 'cancelled' as const,
+              cancelledAt: new Date().toISOString(),
+              cancelledBy: data.currentUser.name,
+              cancelReason,
+            };
+          }
+          return t;
+        });
+
+        const refundedIQD = paymentsToCancel
+          .filter(p => (p.currency || 'IQD') === 'IQD')
+          .reduce((s, p) => s + (p.amount || 0), 0);
+        const refundedUSD = paymentsToCancel
+          .filter(p => p.currency === 'USD')
+          .reduce((s, p) => s + (p.amount || 0), 0);
+
+        refundNotice = `${refundedIQD > 0 ? formatCurrency(refundedIQD, 'IQD') : ''}${
+          refundedUSD > 0 ? (refundedIQD > 0 ? ' + ' : '') + formatCurrency(refundedUSD, 'USD') : ''
+        }`;
+
+        addAuditLog({
+          action: 'void',
+          entityType: 'treasury',
+          entityId: safeTxData.id,
+          entityReference: `بوليصة ${safeTxData.billNo}`,
+          title: 'استرداد أجور النقل إلى الصندوق بعد مسح الشحن',
+          details: `تم إلغاء ${paymentsToCancel.length} سند صرف لنواقل البوليصة (${safeTxData.billNo}) وإعادة المبالغ (${refundNotice}) إلى رصيد الصندوق تلقائياً بعد مسح مصاريف النقل.`,
+          financialImpact: {
+            amount: refundedIQD || refundedUSD,
+            balanceChange: `إيداع واسترداد نقدي إلى الصندوق: +${refundNotice}`,
+          },
+        });
+      }
+
+      setData(prev => ({
+        ...prev,
+        transactions: updated,
+        receipts: updatedReceipts,
+        treasury: updatedTreasury,
+      }));
+
       addAuditLog({
         action: 'update',
         entityType: 'bill',
@@ -458,7 +569,12 @@ export default function App() {
         details: `تحديث بيانات البوليصة (${safeTxData.billNo}) - المبلغ الكلي: ${formatCurrency(safeTxData.totalAmount, txCurr)}.`,
         financialImpact: { amount: safeTxData.totalAmount },
       });
-      showToast('تم تعديل بيانات البوليصة بنجاح');
+
+      if (refundNotice) {
+        showToast(`تم تعديل البوليصة واسترداد ${refundNotice} إلى رصيد الصندوق تلقائياً`);
+      } else {
+        showToast('تم تعديل بيانات البوليصة بنجاح');
+      }
     } else {
       const txCurr = safeTxData.currency || 'IQD';
       const newTx: Transaction = {
@@ -509,23 +625,31 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (tx: Transaction) => {
-    // Check if the bill has active financial movements (non-cancelled receipts or collected/advance funds)
+    // Check if the bill has active financial movements (non-cancelled receipts, collected/advance funds, or carrier payments)
     const activeReceipts = data.receipts.filter(r => r.billId === tx.id && r.status !== 'cancelled');
     const fin = getBillFinancials(tx, data.receipts);
+    const activeCarrierPayments = (data.treasury || []).filter(
+      t =>
+        t.status !== 'cancelled' &&
+        t.type === 'withdrawal' &&
+        (t.carrierId || t.subAccount === 'carriers') &&
+        t.relatedBillNo &&
+        t.relatedBillNo.trim().toLowerCase() === tx.billNo.trim().toLowerCase()
+    );
 
-    if (activeReceipts.length > 0 || fin.totalCollected > 0 || fin.totalAdvances > 0) {
+    if (activeReceipts.length > 0 || fin.totalCollected > 0 || fin.totalAdvances > 0 || activeCarrierPayments.length > 0) {
       // Accounting Guard: Block raw deletion to protect financial ledger integrity
       setDeleteConfirmation({
         isOpen: true,
         mode: 'blocked',
         title: 'قيد حماية محاسبي: منع حذف البوليصة',
         itemName: `بوليصة رقم: ${tx.billNo} - ${tx.goodsType || 'بضاعة عامة'}`,
-        message: `وفقاً للمبادئ والمعايير المحاسبية المعتمدة، لا يمكن حذف بوليصة كمركية تم تقييد وصولات قبض أو سلف مرتبطة بها بصندوق الشركة. يمكنك إلغاء السندات أولاً أو تحويل حالة البوليصة دفترياً إلى "ملغاة" للاحتفاظ بالأمان المالي.`,
+        message: `وفقاً للمبادئ والمعايير المحاسبية المعتمدة، لا يمكن حذف بوليصة كمركية تم تقييد وصولات قبض أو سلف أو دفعات نقل مرتبطة بها بصندوق الشركة. يمكنك إلغاء السندات أولاً أو تحويل حالة البوليصة دفترياً إلى "ملغاة" للاحتفاظ بالأمان المالي واسترداد المبالغ للصندوق.`,
         hasPermission: data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords,
         activeFinancialsWarning: {
           collected: fin.totalCollected,
           advances: fin.totalAdvances,
-          receiptsCount: activeReceipts.length,
+          receiptsCount: activeReceipts.length + activeCarrierPayments.length,
         },
         onConvertToCancelledBill: () => {
           setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
@@ -1983,6 +2107,7 @@ export default function App() {
         carriers={data.carriers || []}
         onQuickAddCarrier={handleQuickAddCarrier}
         receipts={data.receipts}
+        treasury={data.treasury || []}
         exchangeRate={data.exchangeRate || 1500}
         onExchangeRateChange={(newRate) => handleSaveExchangeRate(newRate, true)}
         onViewArchive={(att, title) => handleOpenArchiveViewer(att, title)}
@@ -2403,6 +2528,7 @@ export default function App() {
         customers={data.customers}
         employees={data.employees}
         receipts={data.receipts}
+        treasury={data.treasury || []}
         currentUser={data.currentUser}
         onClose={() => {
           setIsVoidBillModalOpen(false);
