@@ -1,4 +1,21 @@
 import type { NextConfig } from 'next';
+import fs from 'fs';
+import path from 'path';
+
+// Clean stale production build artifacts if starting Next.js in development mode
+// This prevents Next.js Webpack runtime chunk mismatch ("Cannot find module './xxx.js'")
+const isDev = process.env.NODE_ENV !== 'production' || process.argv.includes('dev');
+if (isDev) {
+  try {
+    const nextDir = path.join(process.cwd(), '.next');
+    if (
+      fs.existsSync(path.join(nextDir, 'BUILD_ID')) ||
+      fs.existsSync(path.join(nextDir, 'prerender-manifest.json'))
+    ) {
+      fs.rmSync(nextDir, { recursive: true, force: true });
+    }
+  } catch (_) {}
+}
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
