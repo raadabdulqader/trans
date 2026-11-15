@@ -174,16 +174,40 @@ export const PrintTreasuryModal: React.FC<PrintTreasuryModalProps> = ({
                   </div>
 
                   {transaction.hasCommission && (transaction.commissionAmount || 0) > 0 && (
-                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 flex justify-between items-center text-xs">
-                      <div>
-                        <strong>عمولة تحويل / صرافة:</strong>{' '}
-                        <span className="font-mono font-bold" dir="ltr">
-                          {formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || transaction.currency || 'IQD')}
-                        </span>
-                        <span className="mr-2 text-[11px] text-amber-800">
-                          ({transaction.commissionBearer === 'company' ? 'تحمل الشركة كمصروف' : 'تحمل الطرف الآخر'})
-                        </span>
+                    <div className="p-3 rounded-lg bg-amber-50/90 border border-amber-300 text-amber-950 space-y-1.5 text-xs">
+                      <div className="flex flex-wrap justify-between items-center gap-2">
+                        <div>
+                          <strong>عمولة تحويل / صرافة:</strong>{' '}
+                          <span className="font-mono font-bold" dir="ltr">
+                            {formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || transaction.currency || 'IQD')}
+                          </span>
+                          <span className="mr-2 text-[11px] font-semibold text-amber-900">
+                            ({transaction.commissionBearer === 'company'
+                              ? 'تحملتها الشركة كمصروف مستقل — لا تُستقطع من حق الطرف'
+                              : 'يتحملها الطرف الآخر'})
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-700">
+                          حق الطرف المالي: <strong>{formatCurrency(transaction.amount, transaction.currency || 'IQD')}</strong> (كامل غير منقوص)
+                        </div>
                       </div>
+
+                      {transaction.commissionBearer === 'company' && (
+                        <div className="text-[11px] text-slate-700 border-t border-amber-200/80 pt-1 flex justify-between">
+                          <span>
+                            {transaction.type === 'deposit' ? 'صافي النقد الفعلي المستلم بالصندوق:' : 'إجمالي النقد الفعلي المصروف من الصندوق:'}
+                          </span>
+                          <strong className="font-mono" dir="ltr">
+                            {(transaction.commissionCurrency || transaction.currency || 'IQD') === (transaction.currency || 'IQD')
+                              ? transaction.type === 'deposit'
+                                ? formatCurrency(Math.max(0, transaction.amount - (transaction.commissionAmount || 0)), transaction.currency || 'IQD')
+                                : formatCurrency(transaction.amount + (transaction.commissionAmount || 0), transaction.currency || 'IQD')
+                              : transaction.type === 'deposit'
+                              ? `${formatCurrency(transaction.amount, transaction.currency || 'IQD')} (مع خصم ${formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || 'IQD')} عمولة)`
+                              : `${formatCurrency(transaction.amount, transaction.currency || 'IQD')} (مع إضافة ${formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || 'IQD')} عمولة)`}
+                          </strong>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -191,6 +215,128 @@ export const PrintTreasuryModal: React.FC<PrintTreasuryModalProps> = ({
                     <strong>وذلك عن / البيان:</strong>
                     <span className="mx-2 text-slate-800">{transaction.description || 'حركة نقدية بصندوق الشركة'}</span>
                   </div>
+                </div>
+
+                {/* Journal Entry (سند التوجيه المحاسبي المولد) */}
+                <div className="mt-4 border border-slate-300 rounded-xl overflow-hidden text-xs">
+                  <div className="bg-slate-100 px-3 py-1.5 font-bold border-b border-slate-200 text-slate-800 flex justify-between items-center">
+                    <span>التوجيه المحاسبي الدفتري المعتمد (سند القيد)</span>
+                    <span className="text-[10px] text-slate-500 font-normal">مطابق لمعايير القيد المزدوج</span>
+                  </div>
+                  <table className="w-full text-right border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-[11px] text-slate-700 border-b border-slate-200 font-semibold">
+                        <th className="py-1.5 px-3 w-28 text-center">مدين</th>
+                        <th className="py-1.5 px-3 w-28 text-center">دائن</th>
+                        <th className="py-1.5 px-3">اسم الحساب الدفتري والبيان</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-[11px] font-mono">
+                      {transaction.hasCommission && (transaction.commissionAmount || 0) > 0 && transaction.commissionBearer === 'company' ? (
+                        transaction.type === 'deposit' ? (
+                          <>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-emerald-700 font-bold" dir="ltr">
+                                {(transaction.commissionCurrency || transaction.currency || 'IQD') === (transaction.currency || 'IQD')
+                                  ? formatCurrency(Math.max(0, transaction.amount - (transaction.commissionAmount || 0)), transaction.currency || 'IQD')
+                                  : formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 font-sans">
+                                حـ/ الصندوق ({transaction.currency || 'IQD'}) - صافي النقد المقبوض
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-amber-700 font-bold" dir="ltr">
+                                {formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 font-sans">
+                                حـ/ مصاريف عمولات وتحويل ({transaction.commissionCurrency || transaction.currency || 'IQD'}) - عبء على الشركة
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 text-center text-cyan-800 font-bold" dir="ltr">
+                                {formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 font-sans font-bold">
+                                إلى حـ/ {transaction.partyName || 'المودع'} (إجمالي المبلغ المقيد لحسابه دون استقطاع)
+                              </td>
+                            </tr>
+                          </>
+                        ) : (
+                          <>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-cyan-800 font-bold" dir="ltr">
+                                {formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 font-sans font-bold">
+                                حـ/ {transaction.partyName || 'المستلم'} (كامل المبلغ المسحوب لحسابه)
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-amber-700 font-bold" dir="ltr">
+                                {formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 font-sans">
+                                حـ/ مصاريف عمولات وتحويل ({transaction.commissionCurrency || transaction.currency || 'IQD'}) - عبء على الشركة
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 text-center text-rose-700 font-bold" dir="ltr">
+                                {(transaction.commissionCurrency || transaction.currency || 'IQD') === (transaction.currency || 'IQD')
+                                  ? formatCurrency(transaction.amount + (transaction.commissionAmount || 0), transaction.currency || 'IQD')
+                                  : `${formatCurrency(transaction.amount, transaction.currency || 'IQD')} + ${formatCurrency(transaction.commissionAmount || 0, transaction.commissionCurrency || 'IQD')}`}
+                              </td>
+                              <td className="py-1 px-3 font-sans">
+                                إلى حـ/ الصندوق ({transaction.currency || 'IQD'}) - إجمالي النقد المصروف
+                              </td>
+                            </tr>
+                          </>
+                        )
+                      ) : (
+                        transaction.type === 'deposit' ? (
+                          <>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-emerald-700 font-bold" dir="ltr">
+                                {formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 font-sans">حـ/ الصندوق ({transaction.currency || 'IQD'})</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 text-center text-cyan-800 font-bold" dir="ltr">
+                                {formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 font-sans">إلى حـ/ {transaction.partyName || 'المودع'}</td>
+                            </tr>
+                          </>
+                        ) : (
+                          <>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-cyan-800 font-bold" dir="ltr">
+                                {formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 font-sans">حـ/ {transaction.partyName || 'المستلم'}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 px-3 text-center text-slate-400">—</td>
+                              <td className="py-1 px-3 text-center text-rose-700 font-bold" dir="ltr">
+                                {formatCurrency(transaction.amount, transaction.currency || 'IQD')}
+                              </td>
+                              <td className="py-1 px-3 font-sans">إلى حـ/ الصندوق ({transaction.currency || 'IQD'})</td>
+                            </tr>
+                          </>
+                        )
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 

@@ -17,9 +17,11 @@ import {
   FileCheck2,
   Upload,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Plus,
+  Pencil
 } from 'lucide-react';
-import { Transaction, Customer, Employee, Receipt, Attachment, COMPANIES, TreasuryAttachment } from '../../types/customs';
+import { Transaction, Customer, Employee, Receipt, Attachment, COMPANIES, TreasuryAttachment, TreasuryTransaction, BillTransportTrip } from '../../types/customs';
 import { formatCurrency, getBillFinancials, getReceiptBreakdownForBill } from '../../utils/storage';
 import { Badge } from '../ui/badge';
 import { CUSTOMS_PRESET_NOTES } from '../../utils/customsNotes';
@@ -31,6 +33,7 @@ interface TransactionDetailModalProps {
   employees: Employee[];
   receipts: Receipt[];
   attachments: Attachment[];
+  treasury?: TreasuryTransaction[];
   exchangeRate?: number;
   onViewArchive?: (attachment: TreasuryAttachment, title?: string) => void;
   onAttachAgencyToTransaction?: (tx: Transaction, file: File) => void;
@@ -41,6 +44,8 @@ interface TransactionDetailModalProps {
   onOpenAttachments: () => void;
   onPrintBillFile: () => void;
   onPrintInvoice: () => void;
+  onEditTransaction?: (tx: Transaction) => void;
+  onDeleteTrip?: (tx: Transaction, trip: BillTransportTrip) => void;
   onDeleteReceipt?: (receipt: Receipt) => void;
   onDeleteTransaction?: (tx: Transaction) => void;
 }
@@ -52,6 +57,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   employees,
   receipts,
   attachments,
+  treasury,
   exchangeRate = 1500,
   onViewArchive,
   onAttachAgencyToTransaction,
@@ -62,6 +68,8 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   onOpenAttachments,
   onPrintBillFile,
   onPrintInvoice,
+  onEditTransaction,
+  onDeleteTrip,
   onDeleteReceipt,
   onDeleteTransaction,
 }) => {
@@ -70,8 +78,19 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   const customer = customers.find(c => c.id === transaction.customerId);
   const employee = employees.find(e => e.id === transaction.employeeId);
-  const fin = getBillFinancials(transaction, receipts, exchangeRate);
+  const fin = getBillFinancials(transaction, receipts, exchangeRate, treasury);
   const billReceipts = receipts.filter(r => r.billId === transaction.id);
+
+  const normalizeBillNo = (no?: string) => (no || '').trim().replace(/^#/, '').toLowerCase();
+  const currentBillNo = normalizeBillNo(transaction.billNo);
+
+  const carrierPaymentsOnBill = (treasury || []).filter(t => {
+    if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
+    const isCarrierPayment = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
+    if (!isCarrierPayment) return false;
+    return normalizeBillNo(t.relatedBillNo) === currentBillNo;
+  });
+
   const billAttachments = attachments.filter(a => a.entityType === 'transaction' && a.entityId === transaction.id);
   const comp = COMPANIES[transaction.companyId || 'naqaa_basra'] || COMPANIES.naqaa_basra;
 
@@ -357,21 +376,34 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   <span className="text-amber-400">🚛</span>
                   <span>نقل البضائع والنواقل البرية ({transaction.transportTrips?.length || 0} نقلة)</span>
                 </div>
-                {transaction.transportDocument && onViewArchive && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onViewArchive(
-                        transaction.transportDocument!,
-                        `وصل استلام النقل - بوليصة ${transaction.billNo}`
-                      )
-                    }
-                    className="px-3 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-1.5"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>معاينة ورقة / وصل النقل العام</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {onEditTransaction && transaction.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      onClick={() => onEditTransaction(transaction)}
+                      className="px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5 transition"
+                      title="إضافة أو تعديل نقلات وشاحنات البوليصة"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة / إدارة النقلات</span>
+                    </button>
+                  )}
+                  {transaction.transportDocument && onViewArchive && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onViewArchive(
+                          transaction.transportDocument!,
+                          `وصل استلام النقل - بوليصة ${transaction.billNo}`
+                        )
+                      }
+                      className="px-3 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-1.5"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>معاينة ورقة / وصل النقل العام</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {transaction.transportTrips && transaction.transportTrips.length > 0 && (
@@ -385,6 +417,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         <th className="py-2 px-3">السائق ورقم السيارة</th>
                         <th className="py-2 px-3">أجرة الناقل</th>
                         <th className="py-2 px-3 text-center">وصل النقلة</th>
+                        <th className="py-2 px-3 text-center">إجراء</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -423,20 +456,90 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                               <span className="text-slate-500 text-[10px]">—</span>
                             )}
                           </td>
+                          <td className="py-2 px-3 text-center">
+                            {onDeleteTrip && transaction.status !== 'cancelled' ? (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteTrip(transaction, trip)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 transition text-[11px] font-bold shadow-xs cursor-pointer"
+                                title={`حذف نقلة (${trip.carrierName || 'الناقل'}) من البوليصة`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>حذف</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-500 text-[10px]">—</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                     {(fin.totalCarrierCost || 0) > 0 && (
-                      <tfoot>
-                        <tr className="bg-slate-900/90 font-bold border-t border-slate-700 text-xs">
-                          <td colSpan={4} className="py-2.5 px-3 text-amber-300">
+                      <tfoot className="border-t-2 border-slate-700 text-xs divide-y divide-slate-800/80 font-mono">
+                        {/* 1. إجمالي أجور النقل */}
+                        <tr className="bg-slate-900/90 font-bold">
+                          <td colSpan={4} className="py-2.5 px-3 text-slate-300 font-sans">
                             إجمالي أجور النواقل (تكاليف تشغيلية للبوليصة):
                           </td>
                           <td className="py-2.5 px-3 font-mono text-amber-400 font-bold" dir="ltr">
                             {formatCurrency(fin.totalCarrierCost || 0, transaction.currency || 'IQD')}
                           </td>
-                          <td className="py-2.5 px-3 text-center text-[10px] text-cyan-400 font-sans">
-                            مستحقة للنواقل
+                          <td colSpan={2} className="py-2.5 px-3 text-center text-[10px] text-slate-400 font-sans">
+                            تكلفة متفق عليها
+                          </td>
+                        </tr>
+
+                        {/* 2. المسدد للنواقل من الصندوق */}
+                        {(fin.totalCarrierPaid || 0) > 0 && (
+                          <tr className="bg-slate-900/60 font-semibold">
+                            <td colSpan={4} className="py-2 px-3 text-emerald-300 font-sans flex items-center justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-emerald-400">✓</span>
+                                <span>المسدد لشركة النقل (سندات صرف من الصندوق):</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                ({carrierPaymentsOnBill.length} سند صرف)
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 font-mono text-emerald-400 font-bold" dir="ltr">
+                              - {formatCurrency(fin.totalCarrierPaid || 0, transaction.currency || 'IQD')}
+                            </td>
+                            <td colSpan={2} className="py-2 px-3 text-center text-[10px] text-emerald-400 font-sans font-bold">
+                              مسدد نقداً
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* 3. المتبقي المستحق للناقل */}
+                        <tr className={`font-black ${
+                          (fin.remainingCarrierDue || 0) > 0 
+                            ? 'bg-amber-950/40 text-amber-300' 
+                            : 'bg-emerald-950/40 text-emerald-300'
+                        }`}>
+                          <td colSpan={4} className="py-2.5 px-3 font-sans flex items-center gap-2">
+                            <span>الأجور المستحقة المتبقية للناقل (الذمة الجارية):</span>
+                            {(fin.remainingCarrierDue || 0) === 0 && (fin.totalCarrierCost || 0) > 0 && (
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                تم التسديد بالكامل ✅
+                              </span>
+                            )}
+                          </td>
+                          <td className={`py-2.5 px-3 font-mono font-black text-sm ${
+                            (fin.remainingCarrierDue || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'
+                          }`} dir="ltr">
+                            {formatCurrency(
+                              fin.remainingCarrierDue !== undefined 
+                                ? fin.remainingCarrierDue 
+                                : Math.max(0, (fin.totalCarrierCost || 0) - (fin.totalCarrierPaid || 0)), 
+                              transaction.currency || 'IQD'
+                            )}
+                          </td>
+                          <td colSpan={2} className="py-2.5 px-3 text-center text-[10px] font-sans font-bold">
+                            {(fin.remainingCarrierDue || 0) > 0 ? (
+                              <span className="text-amber-400 font-bold">مستحقة للنواقل</span>
+                            ) : (
+                              <span className="text-emerald-400 font-bold">خالصة الذمة</span>
+                            )}
                           </td>
                         </tr>
                       </tfoot>
@@ -452,7 +555,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <FileText className="w-4 h-4 text-emerald-400" />
-                <span>سجل الوصولات، الدفعات، العمولات، والتحويل الخاصة بالبوليصة ({billReceipts.length}):</span>
+                <span>سجل الوصولات، الدفعات، ودفعات النواقل الخاصة بالبوليصة ({billReceipts.length + carrierPaymentsOnBill.length}):</span>
               </span>
 
               {fin.openAdvances > 0 && employee && (
@@ -479,112 +582,164 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {billReceipts.length === 0 ? (
+                  {billReceipts.length === 0 && carrierPaymentsOnBill.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-6 text-center text-slate-400">
-                        لا توجد وصولات مسجلة لهذه البوليصة بعد
+                        لا توجد وصولات أو دفعات مسجلة لهذه البوليصة بعد
                       </td>
                     </tr>
                   ) : (
-                    billReceipts.map(r => {
-                      const isCancelled = r.status === 'cancelled';
-                      const billCurr = transaction.currency === 'USD' ? 'USD' : 'IQD';
-                      const rCurr = r.currency || billCurr;
-                      const b = getReceiptBreakdownForBill(r, billCurr, exchangeRate || transaction.exchangeRate || 1500);
-                      const isCustomerPayment = r.type === 'deposit' || r.type === 'payment';
+                    <>
+                      {billReceipts.map(r => {
+                        const isCancelled = r.status === 'cancelled';
+                        const billCurr = transaction.currency === 'USD' ? 'USD' : 'IQD';
+                        const rCurr = r.currency || billCurr;
+                        const b = getReceiptBreakdownForBill(r, billCurr, exchangeRate || transaction.exchangeRate || 1500);
+                        const isCustomerPayment = r.type === 'deposit' || r.type === 'payment';
 
-                      return (
-                        <tr key={r.id} className={`hover:bg-slate-900/30 ${isCancelled ? 'bg-rose-950/20 text-slate-400' : ''}`}>
-                          <td className="py-2.5 px-3 font-mono font-bold">
-                            <span className={isCancelled ? 'line-through text-slate-500' : 'text-white'}>{r.receiptNo}</span>
-                            {isCancelled && (
-                              <span className="mr-1.5 text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1 py-0.2 rounded font-bold">
-                                ملغي
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              r.type === 'payment' || r.type === 'deposit'
-                                ? 'bg-emerald-500/10 text-emerald-400'
-                                : r.type === 'advance'
-                                ? 'bg-amber-500/10 text-amber-400'
-                                : 'bg-purple-500/10 text-purple-400'
-                            }`}>
-                              {r.type === 'deposit' ? 'دفعة أولى' : r.type === 'payment' ? 'دفعة زبون' : r.type === 'advance' ? 'سلفة مخلص' : 'تسوية سلفة'}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-slate-100" dir="ltr">
-                            {isCancelled ? (
-                              <span className="line-through text-slate-500">{formatCurrency(r.amount, rCurr)}</span>
-                            ) : (
-                              <div className="flex flex-col">
-                                <span className={rCurr === 'USD' ? 'text-cyan-400' : 'text-emerald-400'}>
-                                  {formatCurrency(r.amount, rCurr)}
+                        return (
+                          <tr key={r.id} className={`hover:bg-slate-900/30 ${isCancelled ? 'bg-rose-950/20 text-slate-400' : ''}`}>
+                            <td className="py-2.5 px-3 font-mono font-bold">
+                              <span className={isCancelled ? 'line-through text-slate-500' : 'text-white'}>{r.receiptNo}</span>
+                              {isCancelled && (
+                                <span className="mr-1.5 text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1 py-0.2 rounded font-bold">
+                                  ملغي
                                 </span>
-                                {b.hasCommission && (
-                                  <span className="text-[10px] text-amber-300 font-sans font-semibold mt-0.5">
-                                    عمولة: {formatCurrency(b.commissionAmount, b.commissionCurrency)} ({b.commissionBearer === 'party' ? 'على الزبون' : 'على الشركة'})
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                r.type === 'payment' || r.type === 'deposit'
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : r.type === 'advance'
+                                  ? 'bg-amber-500/10 text-amber-400'
+                                  : 'bg-purple-500/10 text-purple-400'
+                              }`}>
+                                {r.type === 'deposit' ? 'دفعة أولى' : r.type === 'payment' ? 'دفعة زبون' : r.type === 'advance' ? 'سلفة مخلص' : 'تسوية سلفة'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-100" dir="ltr">
+                              {isCancelled ? (
+                                <span className="line-through text-slate-500">{formatCurrency(r.amount, rCurr)}</span>
+                              ) : (
+                                <div className="flex flex-col">
+                                  <span className={rCurr === 'USD' ? 'text-cyan-400' : 'text-emerald-400'}>
+                                    {formatCurrency(r.amount, rCurr)}
                                   </span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-[11px]">
-                            {isCancelled ? (
-                              <span className="text-rose-400">تم تحييد الأثر</span>
-                            ) : isCustomerPayment ? (
-                              <div className="flex flex-col space-y-0.5">
-                                <span>
-                                  <span className="text-slate-400">للبوليصة: </span>
-                                  <strong className="font-mono text-emerald-400" dir="ltr">
-                                    {formatCurrency(b.netCreditInBillCurrency, billCurr)}
-                                  </strong>
-                                  {rCurr !== billCurr && (
-                                    <span className="text-[10px] text-cyan-300 mr-1">(تحويل عملة)</span>
+                                  {b.hasCommission && (
+                                    <span className="text-[10px] text-amber-300 font-sans font-semibold mt-0.5">
+                                      عمولة: {formatCurrency(b.commissionAmount, b.commissionCurrency)} ({b.commissionBearer === 'party' ? 'على الزبون' : 'على الشركة'})
+                                    </span>
                                   )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-[11px]">
+                              {isCancelled ? (
+                                <span className="text-rose-400">تم تحييد الأثر</span>
+                              ) : isCustomerPayment ? (
+                                <div className="flex flex-col space-y-0.5">
+                                  <span>
+                                    <span className="text-slate-400">للبوليصة: </span>
+                                    <strong className="font-mono text-emerald-400" dir="ltr">
+                                      {formatCurrency(b.netCreditInBillCurrency, billCurr)}
+                                    </strong>
+                                    {rCurr !== billCurr && (
+                                      <span className="text-[10px] text-cyan-300 mr-1">(تحويل عملة)</span>
+                                    )}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    الصندوق:{' '}
+                                    <strong className="font-mono text-slate-200" dir="ltr">
+                                      {b.hasCommission && b.commissionCurrency === rCurr
+                                        ? `+${formatCurrency(Math.max(0, r.amount - b.commissionAmount), rCurr)} صافي`
+                                        : `+${formatCurrency(r.amount, rCurr)}${b.hasCommission ? ` (-${formatCurrency(b.commissionAmount, b.commissionCurrency)})` : ''}`}
+                                    </strong>
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-amber-300 font-mono" dir="ltr">
+                                  {r.type === 'advance'
+                                    ? `صرف من الصندوق: -${formatCurrency(r.amount, rCurr)}${b.hasCommission ? ` (وعمولة -${formatCurrency(b.commissionAmount, b.commissionCurrency)})` : ''}`
+                                    : `تصفية سلفة: ${formatCurrency(r.amount, rCurr)}`}
                                 </span>
-                                <span className="text-[10px] text-slate-400">
-                                  الصندوق:{' '}
-                                  <strong className="font-mono text-slate-200" dir="ltr">
-                                    {b.hasCommission && b.commissionCurrency === rCurr
-                                      ? `+${formatCurrency(Math.max(0, r.amount - b.commissionAmount), rCurr)} صافي`
-                                      : `+${formatCurrency(r.amount, rCurr)}${b.hasCommission ? ` (-${formatCurrency(b.commissionAmount, b.commissionCurrency)})` : ''}`}
-                                  </strong>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 max-w-[200px]">
+                              <div className="font-mono text-[10px] text-slate-500">{r.date}</div>
+                              <div className="truncate text-[11px] text-slate-300">
+                                {isCancelled ? `[ملغي: ${r.cancelReason || 'إلغاء دفتري'}]` : (r.notes || '—')}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {onDeleteReceipt && (
+                                <button
+                                  onClick={() => onDeleteReceipt(r)}
+                                  title={isCancelled ? "حذف السند نهائياً" : "إلغاء السند دفترياً"}
+                                  className={`p-1 rounded-lg transition ${
+                                    isCancelled
+                                      ? 'bg-rose-950/50 hover:bg-rose-900/50 text-rose-400 hover:text-rose-200'
+                                      : 'bg-slate-900 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300'
+                                  }`}
+                                >
+                                  {isCancelled ? <Trash2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Carrier Payments Linked to This Bill */}
+                      {carrierPaymentsOnBill.map(t => {
+                        const tCurr = t.currency || 'IQD';
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-900/30 bg-amber-950/10">
+                            <td className="py-2.5 px-3 font-mono font-bold text-cyan-300">
+                              {t.voucherNo}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                                🚛 دفعة ناقل
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-rose-400" dir="ltr">
+                              - {formatCurrency(t.amount, tCurr)}
+                            </td>
+                            <td className="py-2.5 px-3 text-[11px]">
+                              <div className="flex flex-col space-y-0.5">
+                                <span className="text-slate-200">
+                                  صرف نقدي للناقل: <strong className="text-amber-300 font-bold">{t.partyName || 'شركة النقل'}</strong>
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  خُصمت من استحقاق النقل للبوليصة
                                 </span>
                               </div>
-                            ) : (
-                              <span className="text-amber-300 font-mono" dir="ltr">
-                                {r.type === 'advance'
-                                  ? `صرف من الصندوق: -${formatCurrency(r.amount, rCurr)}${b.hasCommission ? ` (وعمولة -${formatCurrency(b.commissionAmount, b.commissionCurrency)})` : ''}`
-                                  : `تصفية سلفة: ${formatCurrency(r.amount, rCurr)}`}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-400 max-w-[200px]">
-                            <div className="font-mono text-[10px] text-slate-500">{r.date}</div>
-                            <div className="truncate text-[11px] text-slate-300">
-                              {isCancelled ? `[ملغي: ${r.cancelReason || 'إلغاء دفتري'}]` : (r.notes || '—')}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            {onDeleteReceipt && (
-                              <button
-                                onClick={() => onDeleteReceipt(r)}
-                                title={isCancelled ? "حذف السند نهائياً" : "إلغاء السند دفترياً"}
-                                className={`p-1 rounded-lg transition ${
-                                  isCancelled
-                                    ? 'bg-rose-950/50 hover:bg-rose-900/50 text-rose-400 hover:text-rose-200'
-                                    : 'bg-slate-900 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300'
-                                }`}
-                              >
-                                {isCancelled ? <Trash2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 max-w-[200px]">
+                              <div className="font-mono text-[10px] text-slate-500">{t.date}</div>
+                              <div className="truncate text-[11px] text-slate-300">
+                                {t.description || 'تسديد دفعة أجور نقل'}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {t.attachment && onViewArchive ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onViewArchive(t.attachment!, `وصل دفعة الناقل ${t.voucherNo}`)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] font-bold"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>معاينة</span>
+                                </button>
+                              ) : (
+                                <span className="text-slate-500 text-[10px]">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </>
                   )}
                 </tbody>
               </table>
@@ -655,6 +810,18 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onEditTransaction && transaction.status !== 'cancelled' && (
+              <button
+                type="button"
+                onClick={() => onEditTransaction(transaction)}
+                className="px-3 py-2 bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 font-bold rounded-xl transition flex items-center gap-1.5"
+                title="تعديل بيانات البوليصة والنقلات"
+              >
+                <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                <span>تعديل البوليصة</span>
+              </button>
+            )}
+
             <button
               onClick={onPrintBillFile}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition flex items-center gap-1.5 border border-slate-700"

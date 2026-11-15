@@ -28,6 +28,7 @@ export const CommissionSection: React.FC<CommissionSectionProps> = ({
   commissionBearer,
   onBearerChange,
   partyLabel = 'الطرف الآخر',
+  baseCurrency,
 }) => {
   const amountInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -36,6 +37,9 @@ export const CommissionSection: React.FC<CommissionSectionProps> = ({
     if (!checked) {
       onAmountChange(0);
     } else {
+      if (baseCurrency) {
+        onCurrencyChange(baseCurrency);
+      }
       setTimeout(() => {
         amountInputRef.current?.focus();
         amountInputRef.current?.select();
@@ -149,7 +153,7 @@ export const CommissionSection: React.FC<CommissionSectionProps> = ({
             <button
               type="button"
               onClick={() => onBearerChange('company')}
-              title="تُستقطع العمولة من مبلغ الدفعة الداخلة للصندوق وتتحملها الشركة"
+              title="تتحمل الشركة العمولة كمصروف مستقل دون إنقاص حق الطرف الآخر، وتظهر بالمعاملة وبالقيد المحاسبي"
               className={`py-1 px-2.5 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-1 ${
                 commissionBearer === 'company'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'

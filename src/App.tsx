@@ -14,7 +14,8 @@ import {
   EmployeeCategory,
   AuditLogEntry,
   Currency,
-  TransportCompany
+  TransportCompany,
+  BillTransportTrip
 } from './types/customs';
 import { 
   loadData, 
@@ -596,6 +597,8 @@ export default function App() {
         treasury: updatedTreasury,
       }));
 
+      setSelectedTx(prev => (prev && prev.id === safeTxData.id ? updated.find(t => t.id === safeTxData.id) || null : prev));
+
       addAuditLog({
         action: 'update',
         entityType: 'bill',
@@ -726,6 +729,70 @@ export default function App() {
         showToast(`تم حذف البوليصة (${tx.billNo}) بنجاح`);
         setIsTxModalOpen(false);
         setIsTxDetailOpen(false);
+      },
+    });
+  };
+
+  const handleDeleteTripFromBill = (tx: Transaction, trip: BillTransportTrip) => {
+    const normalizeBillNo = (no?: string) => (no || '').trim().replace(/^#/, '').toLowerCase();
+    const billNoClean = normalizeBillNo(tx.billNo);
+
+    const activeCarrierPayments = (data.treasury || []).filter(t => {
+      if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
+      const isCarrier = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
+      if (!isCarrier) return false;
+      const matchBill = normalizeBillNo(t.relatedBillNo) === billNoClean;
+      const matchCarrier = (t.carrierId && t.carrierId === trip.carrierId) || (trip.carrierName && t.partyName === trip.carrierName);
+      return matchBill && matchCarrier;
+    });
+
+    const otherTripsForThisCarrier = (tx.transportTrips || []).filter(
+      t => t.id !== trip.id && ((trip.carrierId && t.carrierId === trip.carrierId) || (trip.carrierName && t.carrierName === trip.carrierName))
+    );
+
+    const willCancelPayments = activeCarrierPayments.length > 0 && otherTripsForThisCarrier.length === 0;
+
+    const totalPaidIQD = activeCarrierPayments.filter(p => (p.currency || 'IQD') === 'IQD').reduce((s, p) => s + (p.amount || 0), 0);
+    const totalPaidUSD = activeCarrierPayments.filter(p => p.currency === 'USD').reduce((s, p) => s + (p.amount || 0), 0);
+    const paidText = `${totalPaidIQD > 0 ? formatCurrency(totalPaidIQD, 'IQD') : ''}${totalPaidUSD > 0 ? (totalPaidIQD > 0 ? ' + ' : '') + formatCurrency(totalPaidUSD, 'USD') : ''}`;
+
+    const hasPerm = data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords;
+
+    const message = willCancelPayments
+      ? `هل أنت متأكد من حذف هذه النقلة (${trip.carrierName || 'شركة النقل'} - ${trip.destination || 'وجهة عامة'})؟\n\nتنبيه محاسبي: توجد سندات صرف مسددة لهذا الناقل من الصندوق بقيمة (${paidText}). عند تأكيد الحذف، سيتم حذف النقلة وإلغاء سندات الصرف دفترياً تلقائياً واسترداد كامل المبالغ المسددة إلى رصيد الصندوق مع قيد تدقيق محاسبي.`
+      : `هل أنت متأكد من حذف هذه النقلة (${trip.carrierName || 'شركة النقل'} - ${trip.destination || 'وجهة عامة'}) من البوليصة رقم (${tx.billNo})؟ سيتم تحديث إجمالي تكاليف النقل المستحقة للبوليصة تلقائياً.`;
+
+    const financialImpact: FinancialImpact | undefined = willCancelPayments
+      ? {
+          inflowChange: `استرداد نقدي للصندوق: +${paidText}`,
+          outflowChange: `إلغاء سندات صرف الناقل: -${paidText}`,
+          balanceChange: `زيادة رصيد الصندوق: +${paidText}`,
+        }
+      : undefined;
+
+    setDeleteConfirmation({
+      isOpen: true,
+      mode: willCancelPayments ? 'cancel' : 'delete',
+      title: 'حذف نقلة / شاحنة من البوليصة',
+      itemName: `${trip.carrierName || 'شركة النقل'} (${trip.destination || 'مسار عام'}) - تكلفة: ${formatCurrency(trip.carrierCost, trip.currency)}`,
+      message,
+      financialImpact,
+      accountingAdvice: willCancelPayments ? [
+        'سيتم إلغاء سندات الصرف المسددة لهذا الناقل دفترياً تلقائياً لإعادة الأموال إلى رصيد الصندوق.',
+        'سيتم تسجيل قيد تدقيق يوضح استرداد المبلغ دفترياً لضمان سلامة ميزانية الخزينة.',
+      ] : undefined,
+      hasPermission: hasPerm,
+      permissionNote: hasPerm
+        ? undefined
+        : `المستخدم الحالي (${data.currentUser.name} - ${data.currentUser.roleTitle}) لا يمتلك صلاحية الحذف.`,
+      onConfirm: () => {
+        const updatedTrips = (tx.transportTrips || []).filter(t => t.id !== trip.id);
+        const updatedTx: Transaction = {
+          ...tx,
+          transportTrips: updatedTrips,
+          hasTransport: updatedTrips.length > 0,
+        };
+        handleSaveTransaction(updatedTx);
       },
     });
   };
@@ -1375,16 +1442,22 @@ export default function App() {
       };
       savedRecord = newTx;
       setData(prev => ({ ...prev, treasury: [newTx, ...(prev.treasury || [])] }));
+      const commText = savedRecord.hasCommission && (savedRecord.commissionAmount || 0) > 0
+        ? ` | عمولة: ${formatCurrency(savedRecord.commissionAmount || 0, savedRecord.commissionCurrency || savedRecord.currency)} (${savedRecord.commissionBearer === 'company' ? 'تحمل الشركة كمصروف مستقل' : 'على الطرف'})`
+        : '';
+
       addAuditLog({
         action: 'create',
         entityType: 'treasury',
         entityId: savedRecord.id,
         entityReference: `قيد ${savedRecord.voucherNo}`,
         title: savedRecord.type === 'deposit' ? 'إيداع نقدي مباشر في الصندوق' : 'سحب نقدي مباشر من الصندوق',
-        details: `${savedRecord.category} - الطرف: ${savedRecord.partyName || 'صندوق الشركة'} بمبلغ ${formatCurrency(savedRecord.amount)} (${savedRecord.description}).`,
+        details: `${savedRecord.category} - الطرف: ${savedRecord.partyName || 'صندوق الشركة'} بمبلغ ${formatCurrency(savedRecord.amount, savedRecord.currency)} (${savedRecord.description || 'حركة نقدية'})${commText}.`,
         financialImpact: {
           amount: savedRecord.amount,
-          balanceChange: savedRecord.type === 'deposit' ? `زيادة الصندوق بمقدار ${formatCurrency(savedRecord.amount)}` : `خصم ${formatCurrency(savedRecord.amount)} من الصندوق`,
+          balanceChange: savedRecord.type === 'deposit' 
+            ? `زيادة الصندوق بمقدار ${formatCurrency(savedRecord.amount, savedRecord.currency)}${commText}` 
+            : `خصم ${formatCurrency(savedRecord.amount, savedRecord.currency)} من الصندوق${commText}`,
         },
       });
       showToast(txData.type === 'deposit' ? 'تم تسجيل الإيداع النقدي في الصندوق' : 'تم تسجيل السحب النقدي من الصندوق');
@@ -2480,6 +2553,7 @@ export default function App() {
         employees={data.employees}
         receipts={data.receipts}
         attachments={data.attachments}
+        treasury={data.treasury || []}
         exchangeRate={data.exchangeRate || 1500}
         onViewArchive={(att, title) => handleOpenArchiveViewer(att, title)}
         onAttachAgencyToTransaction={handleAttachAgencyToTransaction}
@@ -2487,6 +2561,12 @@ export default function App() {
           setIsTxDetailOpen(false);
           setSelectedTx(null);
         }}
+        onEditTransaction={(tx) => {
+          setIsTxDetailOpen(false);
+          setEditingTx(tx);
+          setIsTxModalOpen(true);
+        }}
+        onDeleteTrip={handleDeleteTripFromBill}
         onOpenQuickAdvance={() => {
           if (selectedTx) {
             setQuickAdvTx(selectedTx);

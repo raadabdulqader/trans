@@ -344,18 +344,20 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                 </div>
 
                 {receipt.hasCommission && (receipt.commissionAmount || 0) > 0 && (
-                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 flex flex-wrap justify-between items-center text-xs gap-2">
-                    <div>
-                      <strong>عمولة تحويل / صرافة:</strong>{' '}
-                      <span className="font-mono font-bold" dir="ltr">
-                        {formatCurrency(receipt.commissionAmount || 0, receipt.commissionCurrency || receipt.currency || 'IQD')}
-                      </span>
-                      <span className="mr-2 text-[11px] text-amber-800">
-                        (الجهة المتحملة: {receipt.commissionBearer === 'company' ? 'الشركة / الصندوق كمصروف' : 'الزبون / الطرف الآخر'})
-                      </span>
-                    </div>
-                    <div className="text-[11px] font-mono text-slate-700">
-                      المبلغ الأصلي: {formatCurrency(receipt.amount, receipt.currency || 'IQD')}
+                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 space-y-1.5 text-xs">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                      <div>
+                        <strong>عمولة تحويل / صرافة:</strong>{' '}
+                        <span className="font-mono font-bold" dir="ltr">
+                          {formatCurrency(receipt.commissionAmount || 0, receipt.commissionCurrency || receipt.currency || 'IQD')}
+                        </span>
+                        <span className="mr-2 text-[11px] font-semibold text-amber-900">
+                          ({receipt.commissionBearer === 'company' ? 'تحمل الشركة كمصروف مستقل — لا تُستقطع من رصيد الزبون' : 'الزبون / الطرف الآخر'})
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-700">
+                        المبلغ المقيد لحساب الزبون: <strong>{formatCurrency(receipt.amount, receipt.currency || 'IQD')}</strong> (كامل)
+                      </div>
                     </div>
                   </div>
                 )}

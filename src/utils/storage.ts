@@ -534,6 +534,12 @@ export interface BillFinancials {
   totalCarrierCost: number; // إجمالي تكاليف ومصاريف النواقل المرتبطة بالبوليصة (تكلفة تشغيلية لا تخصم من الزبون)
   totalCarrierCostIQD: number;
   totalCarrierCostUSD: number;
+  totalCarrierPaid?: number; // إجمالي المسدد للنواقل من الصندوق للبوليصة
+  totalCarrierPaidIQD?: number;
+  totalCarrierPaidUSD?: number;
+  remainingCarrierDue?: number; // المتبقي المستحق للنواقل بذمة البوليصة
+  remainingCarrierDueIQD?: number;
+  remainingCarrierDueUSD?: number;
   totalAmount: number; // إجمالي استحقاق البوليصة بذمة الزبون (شامل لكل التكاليف المتفق عليها)
   initialPaid: number;
   additionalPayments: number;
@@ -564,7 +570,12 @@ export interface BillFinancials {
   exchangeRateUsed?: number;
 }
 
-export const getBillFinancials = (tx: Transaction, receipts: Receipt[], currentRate?: number): BillFinancials => {
+export const getBillFinancials = (
+  tx: Transaction, 
+  receipts: Receipt[], 
+  currentRate?: number,
+  treasury?: TreasuryTransaction[]
+): BillFinancials => {
   const currency: Currency = tx.currency === 'USD' ? 'USD' : 'IQD';
   const isMixed = !!tx.isMixedCurrency;
   const isTxCancelled = tx.status === 'cancelled';
@@ -602,6 +613,33 @@ export const getBillFinancials = (tx: Transaction, receipts: Receipt[], currentR
       }
     });
   }
+
+  // Calculate carrier payments from treasury linked to this bill
+  const normalizeBillNo = (no?: string) => (no || '').trim().replace(/^#/, '').toLowerCase();
+  const txBillNo = normalizeBillNo(tx.billNo);
+
+  const activeCarrierPayments = (treasury || []).filter(t => {
+    if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
+    const isCarrier = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
+    if (!isCarrier) return false;
+    return normalizeBillNo(t.relatedBillNo) === txBillNo;
+  });
+
+  const totalCarrierPaidIQD = activeCarrierPayments
+    .filter(t => (t.currency || 'IQD') === 'IQD')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  const totalCarrierPaidUSD = activeCarrierPayments
+    .filter(t => t.currency === 'USD')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  const totalCarrierPaid = currency === 'USD'
+    ? totalCarrierPaidUSD + Math.round((totalCarrierPaidIQD / rate) * 100) / 100
+    : totalCarrierPaidIQD + Math.round(totalCarrierPaidUSD * rate);
+
+  const remainingCarrierDue = Math.max(0, carrierCostInBillCurr - totalCarrierPaid);
+  const remainingCarrierDueIQD = Math.max(0, totalCarrierCostIQD - totalCarrierPaidIQD);
+  const remainingCarrierDueUSD = Math.max(0, totalCarrierCostUSD - totalCarrierPaidUSD);
 
   // Separate Broker Advances by Currency
   const advIQD = activeReceipts
@@ -646,6 +684,12 @@ export const getBillFinancials = (tx: Transaction, receipts: Receipt[], currentR
       totalCarrierCost: totalCarrierCostIQD,
       totalCarrierCostIQD,
       totalCarrierCostUSD,
+      totalCarrierPaid,
+      totalCarrierPaidIQD,
+      totalCarrierPaidUSD,
+      remainingCarrierDue,
+      remainingCarrierDueIQD,
+      remainingCarrierDueUSD,
       totalAmount: totalAmountIQD,
       initialPaid: initialIQD,
       additionalPayments: addIQD,
@@ -749,6 +793,12 @@ export const getBillFinancials = (tx: Transaction, receipts: Receipt[], currentR
     totalCarrierCost: carrierCostInBillCurr,
     totalCarrierCostIQD,
     totalCarrierCostUSD,
+    totalCarrierPaid,
+    totalCarrierPaidIQD,
+    totalCarrierPaidUSD,
+    remainingCarrierDue,
+    remainingCarrierDueIQD,
+    remainingCarrierDueUSD,
     totalAmount: isTxCancelled ? (tx.totalAmount || 0) : totalAmount,
     initialPaid: initial,
     additionalPayments,
