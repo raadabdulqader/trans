@@ -662,21 +662,53 @@ export const getBillFinancials = (
     // Mixed currency (IQD + USD) - Carrier costs are operational expenses, not deducted from customer's receivable
     const grossTotalAmountIQD = isTxCancelled ? 0 : Math.max(0, tx.totalAmount || 0);
     const totalAmountIQD = grossTotalAmountIQD;
-    const initialIQD = isTxCancelled ? 0 : Math.min(totalAmountIQD, Math.max(0, tx.initialPaid || 0));
-    const addIQD = activeReceipts
-      .filter(r => r.type === 'payment' && (r.currency || 'IQD') === 'IQD')
+    const grossTotalAmountUSD = isTxCancelled ? 0 : Math.max(0, tx.totalAmountUSD || 0);
+    const totalAmountUSD = grossTotalAmountUSD;
+
+    const allDepositReceiptsForBill = receipts.filter(r => r.billId === tx.id && r.type === 'deposit');
+    const depositReceiptsActive = activeReceipts.filter(r => r.type === 'deposit');
+    const paymentReceiptsActive = activeReceipts.filter(r => r.type === 'payment');
+
+    const depositIQD = depositReceiptsActive
+      .filter(r => (r.currency || 'IQD') === 'IQD')
+      .reduce((s, r) => s + (r.amount || 0), 0);
+    const initialIQD = isTxCancelled 
+      ? 0 
+      : allDepositReceiptsForBill.length > 0 
+        ? depositIQD 
+        : Math.min(totalAmountIQD, Math.max(0, tx.initialPaid || 0));
+
+    const depositUSD = depositReceiptsActive
+      .filter(r => r.currency === 'USD')
+      .reduce((s, r) => s + (r.amount || 0), 0);
+    const initialUSD = isTxCancelled 
+      ? 0 
+      : allDepositReceiptsForBill.length > 0 
+        ? depositUSD 
+        : Math.min(totalAmountUSD, Math.max(0, tx.initialPaidUSD || 0));
+
+    const addIQD = paymentReceiptsActive
+      .filter(r => (r.currency || 'IQD') === 'IQD')
       .reduce((s, r) => s + getReceiptBreakdownForBill(r, 'IQD', rate).netCreditInBillCurrency, 0);
+
+    const addUSD = paymentReceiptsActive
+      .filter(r => r.currency === 'USD')
+      .reduce((s, r) => s + getReceiptBreakdownForBill(r, 'USD', rate).netCreditInBillCurrency, 0);
+
     const totalCollectedIQD = Math.min(totalAmountIQD, initialIQD + addIQD);
     const remainingIQD = Math.max(0, totalAmountIQD - totalCollectedIQD);
 
-    const grossTotalAmountUSD = isTxCancelled ? 0 : Math.max(0, tx.totalAmountUSD || 0);
-    const totalAmountUSD = grossTotalAmountUSD;
-    const initialUSD = isTxCancelled ? 0 : Math.min(totalAmountUSD, Math.max(0, tx.initialPaidUSD || 0));
-    const addUSD = activeReceipts
-      .filter(r => r.type === 'payment' && r.currency === 'USD')
-      .reduce((s, r) => s + getReceiptBreakdownForBill(r, 'USD', rate).netCreditInBillCurrency, 0);
     const totalCollectedUSD = Math.min(totalAmountUSD, initialUSD + addUSD);
     const remainingUSD = Math.max(0, totalAmountUSD - totalCollectedUSD);
+
+    // Track actual collections in IQD and USD for mixed
+    const allBillCollections = [...depositReceiptsActive, ...paymentReceiptsActive];
+    const collectedInIQD = allBillCollections
+      .filter(r => (r.currency || 'IQD') === 'IQD')
+      .reduce((s, r) => s + (r.amount || 0), 0) + (allDepositReceiptsForBill.length === 0 ? (tx.initialPaid || 0) : 0);
+    const collectedInUSD = allBillCollections
+      .filter(r => r.currency === 'USD')
+      .reduce((s, r) => s + (r.amount || 0), 0) + (allDepositReceiptsForBill.length === 0 ? (tx.initialPaidUSD || 0) : 0);
 
     return {
       currency: 'IQD',
@@ -700,6 +732,8 @@ export const getBillFinancials = (
       openAdvances: openAdvancesIQD + (openAdvancesUSD * rate),
       openAdvancesIQD,
       openAdvancesUSD,
+      collectedInIQD,
+      collectedInUSD,
       isMixedCurrency: true,
       grossTotalAmountUSD,
       totalAmountUSD,
@@ -708,6 +742,9 @@ export const getBillFinancials = (
       totalCollectedUSD,
       remainingAmountUSD: remainingUSD,
       equivalentTotalIQD: totalAmountIQD + (totalAmountUSD * rate),
+      equivalentCollectedIQD: totalCollectedIQD + (totalCollectedUSD * rate),
+      equivalentRemainingIQD: remainingIQD + (remainingUSD * rate),
+      exchangeRateUsed: rate,
     };
   }
 
@@ -720,14 +757,18 @@ export const getBillFinancials = (
   const depositReceiptsActive = activeReceipts.filter(r => r.type === 'deposit');
   const paymentReceiptsActive = activeReceipts.filter(r => r.type === 'payment');
 
+  const fallbackInitial = currency === 'IQD'
+    ? Math.max(0, tx.initialPaid || 0) + Math.round(Math.max(0, tx.initialPaidUSD || 0) * rate)
+    : Math.max(0, tx.initialPaid || 0) + Math.round((Math.max(0, tx.initialPaidUSD || 0) / rate) * 100) / 100;
+
   const rawInitial = allDepositReceiptsForBill.length > 0
     ? depositReceiptsActive.reduce((sum, r) => sum + getReceiptBreakdownForBill(r, currency, rate).netCreditInBillCurrency, 0)
-    : Math.max(0, tx.initialPaid || 0);
+    : fallbackInitial;
   const initial = isTxCancelled ? 0 : Math.min(totalAmount, rawInitial);
 
   const rawInitialGross = allDepositReceiptsForBill.length > 0
     ? depositReceiptsActive.reduce((sum, r) => sum + getReceiptBreakdownForBill(r, currency, rate).grossInBillCurrency, 0)
-    : Math.max(0, tx.initialPaid || 0);
+    : fallbackInitial;
 
   const additionalPayments = paymentReceiptsActive.reduce(
     (sum, r) => sum + getReceiptBreakdownForBill(r, currency, rate).netCreditInBillCurrency,
@@ -748,10 +789,10 @@ export const getBillFinancials = (
   const allBillCollections = [...depositReceiptsActive, ...paymentReceiptsActive];
   const collectedInIQD = allBillCollections
     .filter(r => (r.currency || 'IQD') === 'IQD')
-    .reduce((s, r) => s + (r.amount || 0), 0) + (allDepositReceiptsForBill.length === 0 && currency === 'IQD' ? (tx.initialPaid || 0) : 0);
+    .reduce((s, r) => s + (r.amount || 0), 0) + (allDepositReceiptsForBill.length === 0 ? (currency === 'IQD' ? (tx.initialPaid || 0) : 0) : 0);
   const collectedInUSD = allBillCollections
     .filter(r => r.currency === 'USD')
-    .reduce((s, r) => s + (r.amount || 0), 0) + (allDepositReceiptsForBill.length === 0 && currency === 'USD' ? (tx.initialPaid || 0) : 0);
+    .reduce((s, r) => s + (r.amount || 0), 0) + (allDepositReceiptsForBill.length === 0 ? (currency === 'USD' ? (tx.initialPaid || 0) : (tx.initialPaidUSD || 0)) : 0);
 
   let commissionsIQD = 0;
   let commissionsUSD = 0;

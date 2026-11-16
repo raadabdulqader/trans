@@ -287,11 +287,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         <td className="pt-3.5 pb-1.5 px-4 align-top">
                           <div className="text-[10px] text-slate-400 font-semibold mb-0.5">المسدد من الزبون</div>
                           <div className="font-mono font-bold text-emerald-400 text-sm" dir="ltr">
-                            {formatCurrency(fin.totalCollected, tx.currency || 'IQD')}
+                            {tx.isMixedCurrency ? (
+                              <div className="flex flex-col text-xs leading-tight">
+                                <span>{formatCurrency(fin.totalCollected, 'IQD')}</span>
+                                <span className="text-cyan-300">+{formatCurrency(fin.totalCollectedUSD || 0, 'USD')}</span>
+                              </div>
+                            ) : (
+                              formatCurrency(fin.totalCollected, tx.currency || 'IQD')
+                            )}
                           </div>
-                          {/* Show actual currencies received if cross-currency payment occurred */}
-                          {((tx.currency === 'USD' && (fin.collectedInIQD || 0) > 0) ||
-                            ((tx.currency || 'IQD') === 'IQD' && (fin.collectedInUSD || 0) > 0)) && (
+                          {/* Show actual currencies received if cross-currency or dual payment occurred */}
+                          {!tx.isMixedCurrency &&
+                            (((tx.currency === 'USD' && (fin.collectedInIQD || 0) > 0) ||
+                              ((tx.currency || 'IQD') === 'IQD' && (fin.collectedInUSD || 0) > 0) ||
+                              ((fin.collectedInUSD || 0) > 0 && (fin.collectedInIQD || 0) > 0))) && (
                             <div className="text-[10px] text-cyan-300 font-mono mt-0.5" dir="ltr">
                               {(fin.collectedInUSD || 0) > 0 ? `$${(fin.collectedInUSD || 0).toLocaleString()}` : ''}
                               {(fin.collectedInUSD || 0) > 0 && (fin.collectedInIQD || 0) > 0 ? ' + ' : ''}
@@ -315,13 +324,22 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         <td className="pt-3.5 pb-1.5 px-4 align-top">
                           <div className="text-[10px] text-slate-400 font-semibold mb-0.5">المتبقي على الزبون</div>
                           <div className="font-mono font-bold text-sm" dir="ltr">
-                            {fin.remainingAmount > 0 ? (
+                            {tx.isMixedCurrency ? (
+                              (fin.remainingAmount > 0 || (fin.remainingAmountUSD || 0) > 0) ? (
+                                <div className="flex flex-col text-xs leading-tight text-amber-400">
+                                  <span>{formatCurrency(fin.remainingAmount, 'IQD')}</span>
+                                  <span className="text-cyan-400">+{formatCurrency(fin.remainingAmountUSD || 0, 'USD')}</span>
+                                </div>
+                              ) : (
+                                <span className="text-emerald-400 font-semibold">0 (خالص)</span>
+                              )
+                            ) : fin.remainingAmount > 0 ? (
                               <span className="text-amber-400">{formatCurrency(fin.remainingAmount, tx.currency || 'IQD')}</span>
                             ) : (
                               <span className="text-emerald-400 font-semibold">0 (خالص)</span>
                             )}
                           </div>
-                          {tx.currency === 'USD' && fin.remainingAmount > 0 && (
+                          {tx.currency === 'USD' && fin.remainingAmount > 0 && !tx.isMixedCurrency && (
                             <div className="text-[10px] text-amber-300/80 font-mono mt-0.5">
                               ≈ {new Intl.NumberFormat('ar-IQ').format(Math.round(fin.remainingAmount * exchangeRate))} د.ع
                             </div>
@@ -354,20 +372,27 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                               </button>
                             )}
 
-                            {(currentUser.role === 'admin' || currentUser.permissions.createReceipts !== false) && (
-                              <button
-                                onClick={() => onOpenQuickPayment(tx)}
-                                disabled={fin.remainingAmount <= 0}
-                                title={fin.remainingAmount <= 0 ? 'البوليصة مسددة بالكامل (خالصة)' : 'تسجيل دفعة جديدة من الزبون'}
-                                className={`p-1.5 rounded-xl transition ${
-                                  fin.remainingAmount <= 0
-                                    ? 'bg-slate-900 text-slate-600 cursor-not-allowed'
-                                    : 'bg-slate-800 hover:bg-slate-700 text-emerald-400'
-                                }`}
-                              >
-                                <Wallet className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            {(() => {
+                              const isFullyPaid = tx.isMixedCurrency
+                                ? (fin.remainingAmount <= 0 && (fin.remainingAmountUSD || 0) <= 0)
+                                : fin.remainingAmount <= 0;
+                              return (
+                                (currentUser.role === 'admin' || currentUser.permissions.createReceipts !== false) && (
+                                  <button
+                                    onClick={() => onOpenQuickPayment(tx)}
+                                    disabled={isFullyPaid}
+                                    title={isFullyPaid ? 'البوليصة مسددة بالكامل (خالصة)' : 'تسجيل دفعة جديدة من الزبون'}
+                                    className={`p-1.5 rounded-xl transition ${
+                                      isFullyPaid
+                                        ? 'bg-slate-900 text-slate-600 cursor-not-allowed'
+                                        : 'bg-slate-800 hover:bg-slate-700 text-emerald-400'
+                                    }`}
+                                  >
+                                    <Wallet className="w-3.5 h-3.5" />
+                                  </button>
+                                )
+                              );
+                            })()}
 
                             {(currentUser.role === 'admin' || currentUser.permissions.editTx) && (
                               <button

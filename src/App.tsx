@@ -470,49 +470,94 @@ export default function App() {
   // Transaction Save
   const handleSaveTransaction = (txData: Omit<Transaction, 'id' | 'createdAt'> & { id?: string }) => {
     const totalAmount = Math.max(0, Number(txData.totalAmount) || 0);
-    const initialPaid = Math.min(totalAmount, Math.max(0, Number(txData.initialPaid) || 0));
+    const initialPaid = Math.max(0, Number(txData.initialPaid) || 0);
+    const initialPaidUSD = Math.max(0, Number(txData.initialPaidUSD) || 0);
     const safeTxData = {
       ...txData,
       totalAmount,
       initialPaid,
+      initialPaidUSD,
     };
+    const txCurr = safeTxData.currency || 'IQD';
 
     if (safeTxData.id) {
       const oldTx = data.transactions.find(t => t.id === safeTxData.id);
       const updated = data.transactions.map(t => t.id === safeTxData.id ? { ...t, ...safeTxData } : t);
-      const txCurr = safeTxData.currency || 'IQD';
-      const hasDepositReceipt = data.receipts.some(r => r.billId === safeTxData.id && r.type === 'deposit');
-      let updatedReceipts = data.receipts.map(r => {
+      const rate = safeTxData.exchangeRate || data.exchangeRate || 1500;
+
+      // Handle dual-currency deposit receipts
+      let updatedReceipts = data.receipts.filter(r => {
         if (r.billId === safeTxData.id && r.type === 'deposit') {
-          return {
-            ...r,
-            amount: safeTxData.initialPaid,
-            currency: txCurr,
-            exchangeRate: safeTxData.exchangeRate || data.exchangeRate || 1500,
-            customerId: safeTxData.customerId,
-            companyId: safeTxData.companyId || r.companyId || 'naqaa_basra',
-          };
+          const rCurr = r.currency || 'IQD';
+          if (rCurr === 'IQD' && safeTxData.initialPaid <= 0) return false;
+          if (rCurr === 'USD' && (safeTxData.initialPaidUSD || 0) <= 0) return false;
+        }
+        return true;
+      }).map(r => {
+        if (r.billId === safeTxData.id && r.type === 'deposit') {
+          const rCurr = r.currency || 'IQD';
+          if (rCurr === 'IQD') {
+            return {
+              ...r,
+              amount: safeTxData.initialPaid,
+              currency: 'IQD' as Currency,
+              exchangeRate: rate,
+              customerId: safeTxData.customerId,
+              companyId: safeTxData.companyId || r.companyId || 'naqaa_basra',
+            };
+          }
+          if (rCurr === 'USD') {
+            return {
+              ...r,
+              amount: safeTxData.initialPaidUSD || 0,
+              currency: 'USD' as Currency,
+              exchangeRate: rate,
+              customerId: safeTxData.customerId,
+              companyId: safeTxData.companyId || r.companyId || 'naqaa_basra',
+            };
+          }
         }
         return r;
       });
-      if (!hasDepositReceipt && safeTxData.initialPaid > 0) {
-        updatedReceipts = [
-          {
-            id: `rcpt-${Date.now()}`,
-            receiptNo: `REC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-            type: 'deposit',
-            billId: safeTxData.id,
-            customerId: safeTxData.customerId,
-            companyId: safeTxData.companyId || 'naqaa_basra',
-            amount: safeTxData.initialPaid,
-            currency: txCurr,
-            exchangeRate: safeTxData.exchangeRate || data.exchangeRate || 1500,
-            date: safeTxData.date,
-            notes: 'دفعة أولى مسجلة تلقائياً عند تعديل المعاملة',
-            createdAt: new Date().toISOString().split('T')[0],
-          },
-          ...updatedReceipts,
-        ];
+
+      const hasIQDDeposit = updatedReceipts.some(r => r.billId === safeTxData.id && r.type === 'deposit' && (r.currency || 'IQD') === 'IQD');
+      const hasUSDDeposit = updatedReceipts.some(r => r.billId === safeTxData.id && r.type === 'deposit' && r.currency === 'USD');
+
+      const newDeposits: Receipt[] = [];
+      if (!hasIQDDeposit && safeTxData.initialPaid > 0) {
+        newDeposits.push({
+          id: `rcpt-${Date.now()}-iqd`,
+          receiptNo: `REC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+          type: 'deposit',
+          billId: safeTxData.id,
+          customerId: safeTxData.customerId,
+          companyId: safeTxData.companyId || 'naqaa_basra',
+          amount: safeTxData.initialPaid,
+          currency: 'IQD',
+          exchangeRate: rate,
+          date: safeTxData.date,
+          notes: 'دفعة أولى بالدينار مسجلة تلقائياً عند تعديل المعاملة',
+          createdAt: new Date().toISOString().split('T')[0],
+        });
+      }
+      if (!hasUSDDeposit && (safeTxData.initialPaidUSD || 0) > 0) {
+        newDeposits.push({
+          id: `rcpt-${Date.now() + 1}-usd`,
+          receiptNo: `REC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+          type: 'deposit',
+          billId: safeTxData.id,
+          customerId: safeTxData.customerId,
+          companyId: safeTxData.companyId || 'naqaa_basra',
+          amount: safeTxData.initialPaidUSD || 0,
+          currency: 'USD',
+          exchangeRate: rate,
+          date: safeTxData.date,
+          notes: 'دفعة أولى بالدولار مسجلة تلقائياً عند تعديل المعاملة',
+          createdAt: new Date().toISOString().split('T')[0],
+        });
+      }
+      if (newDeposits.length > 0) {
+        updatedReceipts = [...newDeposits, ...updatedReceipts];
       }
 
       // Check if transport trips were removed/deleted and refund carrier payments to treasury
@@ -621,24 +666,48 @@ export default function App() {
         id: `tx-${Date.now()}`,
         createdAt: new Date().toISOString().split('T')[0],
       };
-      // If there is an initial paid amount, automatically record deposit receipt
+      // If there is an initial paid amount, automatically record deposit receipts for IQD and/or USD
       let newReceipts = [...data.receipts];
+      const rate = newTx.exchangeRate || data.exchangeRate || 1500;
+
       if (newTx.initialPaid > 0) {
         newReceipts.push({
-          id: `rcpt-${Date.now()}`,
+          id: `rcpt-${Date.now()}-iqd`,
           receiptNo: `REC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
           type: 'deposit',
           billId: newTx.id,
           customerId: newTx.customerId,
           companyId: newTx.companyId || 'naqaa_basra',
           amount: newTx.initialPaid,
-          currency: txCurr,
-          exchangeRate: newTx.exchangeRate || data.exchangeRate || 1500,
+          currency: 'IQD',
+          exchangeRate: rate,
           date: newTx.date,
-          notes: 'دفعة أولى مسجلة تلقائياً عند فتح المعاملة',
+          notes: 'دفعة أولى بالدينار مسجلة تلقائياً عند فتح المعاملة',
           createdAt: newTx.createdAt,
         });
       }
+
+      if ((newTx.initialPaidUSD || 0) > 0) {
+        newReceipts.push({
+          id: `rcpt-${Date.now() + 1}-usd`,
+          receiptNo: `REC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+          type: 'deposit',
+          billId: newTx.id,
+          customerId: newTx.customerId,
+          companyId: newTx.companyId || 'naqaa_basra',
+          amount: newTx.initialPaidUSD!,
+          currency: 'USD',
+          exchangeRate: rate,
+          date: newTx.date,
+          notes: 'دفعة أولى بالدولار مسجلة تلقائياً عند فتح المعاملة',
+          createdAt: newTx.createdAt,
+        });
+      }
+
+      const depositSummary = [
+        newTx.initialPaid > 0 ? formatCurrency(newTx.initialPaid, 'IQD') : null,
+        (newTx.initialPaidUSD || 0) > 0 ? formatCurrency(newTx.initialPaidUSD || 0, 'USD') : null,
+      ].filter(Boolean).join(' + ');
 
       setData(prev => ({
         ...prev,
@@ -651,10 +720,14 @@ export default function App() {
         entityId: newTx.id,
         entityReference: `بوليصة ${newTx.billNo}`,
         title: 'إنشاء بوليصة كمركية ومعاملة جديدة',
-        details: `تم تسجيل بوليصة جديدة رقم (${newTx.billNo}) لبضاعة: ${newTx.goodsType || 'عامة'} بمبلغ إجمالي ${formatCurrency(newTx.totalAmount, txCurr)} (الدفعة الأولى: ${formatCurrency(newTx.initialPaid, txCurr)}).`,
+        details: `تم تسجيل بوليصة جديدة رقم (${newTx.billNo}) لبضاعة: ${newTx.goodsType || 'عامة'} بمبلغ إجمالي ${
+          newTx.isMixedCurrency
+            ? `${formatCurrency(newTx.totalAmount, 'IQD')} + ${formatCurrency(newTx.totalAmountUSD || 0, 'USD')}`
+            : formatCurrency(newTx.totalAmount, txCurr)
+        }${depositSummary ? ` (الدفعة الأولى المقبوضة: ${depositSummary})` : ''}.`,
         financialImpact: {
           amount: newTx.totalAmount,
-          balanceChange: newTx.initialPaid > 0 ? `إيداع الدفعة الأولى (${formatCurrency(newTx.initialPaid, txCurr)}) في الصندوق` : undefined,
+          balanceChange: depositSummary ? `إيداع الدفعة الأولى (${depositSummary}) في الصندوق` : undefined,
         },
       });
       showToast('تم إنشاء البوليصة الجديدة بنجاح');
@@ -1031,7 +1104,10 @@ export default function App() {
       const tx = data.transactions.find(t => t.id === rcptData.billId);
       if (tx) {
         const fin = getBillFinancials(tx, data.receipts);
-        if (fin.remainingAmount <= 0) {
+        const hasRemaining = tx.isMixedCurrency
+          ? (fin.remainingAmount > 0 || (fin.remainingAmountUSD || 0) > 0)
+          : fin.remainingAmount > 0;
+        if (!hasRemaining) {
           showToast('هذه البوليصة مسددة بالكامل (خالصة)، ولا يمكن إضافة دفعة');
           return;
         }
@@ -1305,48 +1381,99 @@ export default function App() {
       commissionBearer: 'company' | 'party';
     },
     paymentCurrency?: Currency,
-    customExchangeRate?: number
+    customExchangeRate?: number,
+    dualPayment?: {
+      amountIQD: number;
+      amountUSD: number;
+    }
   ) => {
     if (!quickPayTx) return;
     const fin = getBillFinancials(quickPayTx, data.receipts, customExchangeRate || data.exchangeRate || 1500);
-    if (fin.remainingAmount <= 0) {
+    const hasRemaining = quickPayTx.isMixedCurrency
+      ? (fin.remainingAmount > 0 || (fin.remainingAmountUSD || 0) > 0)
+      : fin.remainingAmount > 0;
+    if (!hasRemaining) {
       showToast('هذه البوليصة مسددة بالكامل (خالصة)، ولا يوجد متبقي مستحق للقبض');
       return;
     }
-    const safeAmount = Number(amount) || 0;
-    const curr = paymentCurrency || quickPayTx.currency || 'IQD';
+
     const usedRate = normalizeExchangeRate(
       customExchangeRate || data.exchangeRate || quickPayTx.exchangeRate,
       1500
     );
 
-    const newRcpt: Receipt = {
-      id: `rcpt-${Date.now()}`,
-      receiptNo: `PAY-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-      type: 'payment',
-      billId: quickPayTx.id,
-      customerId: quickPayTx.customerId,
-      companyId: quickPayTx.companyId || 'naqaa_basra',
-      amount: safeAmount,
-      currency: curr,
-      exchangeRate: usedRate,
-      hasCommission: commission?.hasCommission,
-      commissionAmount: commission?.hasCommission ? commission.commissionAmount : undefined,
-      commissionCurrency: commission?.hasCommission ? commission.commissionCurrency : undefined,
-      commissionBearer: commission?.hasCommission ? commission.commissionBearer : undefined,
-      date,
-      notes,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+    let createdReceipts: Receipt[] = [];
+
+    if (dualPayment && (dualPayment.amountIQD > 0 || dualPayment.amountUSD > 0)) {
+      if (dualPayment.amountIQD > 0) {
+        createdReceipts.push({
+          id: `rcpt-${Date.now()}-iqd`,
+          receiptNo: `PAY-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+          type: 'payment',
+          billId: quickPayTx.id,
+          customerId: quickPayTx.customerId,
+          companyId: quickPayTx.companyId || 'naqaa_basra',
+          amount: dualPayment.amountIQD,
+          currency: 'IQD',
+          exchangeRate: usedRate,
+          date,
+          notes: notes ? `${notes} (دفعة بالدينار)` : 'دفعة من الزبون بالدينار',
+          createdAt: new Date().toISOString().split('T')[0],
+        });
+      }
+      if (dualPayment.amountUSD > 0) {
+        createdReceipts.push({
+          id: `rcpt-${Date.now() + 1}-usd`,
+          receiptNo: `PAY-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+          type: 'payment',
+          billId: quickPayTx.id,
+          customerId: quickPayTx.customerId,
+          companyId: quickPayTx.companyId || 'naqaa_basra',
+          amount: dualPayment.amountUSD,
+          currency: 'USD',
+          exchangeRate: usedRate,
+          hasCommission: commission?.hasCommission,
+          commissionAmount: commission?.hasCommission ? commission.commissionAmount : undefined,
+          commissionCurrency: commission?.hasCommission ? commission.commissionCurrency : undefined,
+          commissionBearer: commission?.hasCommission ? commission.commissionBearer : undefined,
+          date,
+          notes: notes ? `${notes} (دفعة بالدولار)` : 'دفعة من الزبون بالدولار',
+          createdAt: new Date().toISOString().split('T')[0],
+        });
+      }
+    } else {
+      const safeAmount = Number(amount) || 0;
+      const curr = paymentCurrency || quickPayTx.currency || 'IQD';
+      createdReceipts.push({
+        id: `rcpt-${Date.now()}`,
+        receiptNo: `PAY-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+        type: 'payment',
+        billId: quickPayTx.id,
+        customerId: quickPayTx.customerId,
+        companyId: quickPayTx.companyId || 'naqaa_basra',
+        amount: safeAmount,
+        currency: curr,
+        exchangeRate: usedRate,
+        hasCommission: commission?.hasCommission,
+        commissionAmount: commission?.hasCommission ? commission.commissionAmount : undefined,
+        commissionCurrency: commission?.hasCommission ? commission.commissionCurrency : undefined,
+        commissionBearer: commission?.hasCommission ? commission.commissionBearer : undefined,
+        date,
+        notes,
+        createdAt: new Date().toISOString().split('T')[0],
+      });
+    }
+
     saveData.exchangeRate(usedRate);
     setData(prev => ({
       ...prev,
       exchangeRate: usedRate,
-      receipts: [newRcpt, ...prev.receipts],
+      receipts: [...createdReceipts, ...prev.receipts],
     }));
     setIsQuickPayOpen(false);
     setQuickPayTx(null);
-    showToast(`تم تسجيل الدفعة من الزبون بمبلغ ${formatCurrency(safeAmount, curr)} بنجاح`);
+    const summaryText = createdReceipts.map(r => formatCurrency(r.amount, r.currency || 'IQD')).join(' + ');
+    showToast(`تم تسجيل الدفعة من الزبون بمبلغ ${summaryText} بنجاح`);
   };
 
   // Quick Settlement Save

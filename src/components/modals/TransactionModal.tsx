@@ -9,7 +9,8 @@ import {
   AlertCircle,
   DollarSign,
   Paperclip,
-  Truck
+  Truck,
+  Wallet
 } from 'lucide-react';
 import { Transaction, Customer, Employee, Receipt, CompanyId, COMPANIES, Currency, TreasuryAttachment, TransportCompany, BillTransportTrip, TreasuryTransaction } from '../../types/customs';
 import { getBillFinancials, normalizeExchangeRate, formatCurrency } from '../../utils/storage';
@@ -161,10 +162,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     ? transportTrips.filter(t => t.currency === 'USD').reduce((s, t) => s + (Number(t.carrierCost) || 0), 0)
     : 0;
 
-  const isInitialExceeded = totalAmount > 0 && initialPaid > totalAmount;
+  const equivalentInitialInBillCurr = isMixedCurrency
+    ? (Number(initialPaid) || 0)
+    : currency === 'USD'
+    ? (Number(initialPaidUSD) || 0) + (activeRate > 0 ? (Number(initialPaid) || 0) / activeRate : 0)
+    : (Number(initialPaid) || 0) + ((Number(initialPaidUSD) || 0) * activeRate);
+
+  const isInitialExceeded = isMixedCurrency
+    ? (totalAmount > 0 && initialPaid > totalAmount)
+    : (totalAmount > 0 && equivalentInitialInBillCurr > totalAmount + 0.05);
   const isInitialUSDExceeded = isMixedCurrency && totalAmountUSD > 0 && initialPaidUSD > totalAmountUSD;
-  const isTotalLessThanExisting = existingPayments > 0 && totalAmount < (existingPayments + Math.min(totalAmount, initialPaid));
-  const remaining = Math.max(0, Math.round((totalAmount - Math.min(totalAmount, initialPaid) - existingPayments) * 100) / 100);
+  const isTotalLessThanExisting = existingPayments > 0 && totalAmount < (existingPayments + Math.min(totalAmount, equivalentInitialInBillCurr));
+  const remaining = Math.max(0, Math.round((totalAmount - Math.min(totalAmount, equivalentInitialInBillCurr) - existingPayments) * 100) / 100);
   const remainingUSD = Math.max(0, totalAmountUSD - Math.min(totalAmountUSD, initialPaidUSD));
 
   // Check if there are active carrier payments disbursed from treasury on this bill
@@ -334,17 +343,23 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
-    if (initialPaid > totalAmount) {
-      setFormError(`لا يجوز أن تكون الدفعة الأولى أكبر من المبلغ الكلي للبوليصة`);
-      return;
+    if (isMixedCurrency) {
+      if (initialPaid > totalAmount) {
+        setFormError(`لا يجوز أن تكون الدفعة الأولى بالدينار أكبر من إجمالي الدينار للبوليصة`);
+        return;
+      }
+      if (initialPaidUSD > totalAmountUSD) {
+        setFormError(`لا يجوز أن تكون الدفعة الأولى بالدولار ($${initialPaidUSD}) أكبر من إجمالي الدولار ($${totalAmountUSD})`);
+        return;
+      }
+    } else {
+      if (equivalentInitialInBillCurr > totalAmount + 0.05) {
+        setFormError(`لا يجوز أن يكون إجمالي المقدم المقبوض (المعادل: ${formatCurrency(equivalentInitialInBillCurr, currency)}) أكبر من إجمالي البوليصة (${formatCurrency(totalAmount, currency)})`);
+        return;
+      }
     }
 
-    if (isMixedCurrency && initialPaidUSD > totalAmountUSD) {
-      setFormError(`لا يجوز أن تكون الدفعة الأولى بالدولار ($${initialPaidUSD}) أكبر من إجمالي الدولار ($${totalAmountUSD})`);
-      return;
-    }
-
-    if (existingPayments > 0 && totalAmount < (existingPayments + initialPaid)) {
+    if (existingPayments > 0 && totalAmount < (existingPayments + (isMixedCurrency ? initialPaid : equivalentInitialInBillCurr))) {
       setFormError(`المبلغ الكلي لا يمكن أن يكون أقل من مجموع المبالغ المسددة بالفعل لهذه البوليصة`);
       return;
     }
@@ -365,12 +380,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       goodsType,
       status,
       totalAmount: Number(totalAmount) || 0,
-      initialPaid: Math.min(Number(totalAmount) || 0, Number(initialPaid) || 0),
+      initialPaid: Number(initialPaid) || 0,
       currency: isMixedCurrency ? 'IQD' : currency,
       exchangeRate: activeRate,
       isMixedCurrency,
       totalAmountUSD: isMixedCurrency ? Number(totalAmountUSD) || 0 : undefined,
-      initialPaidUSD: isMixedCurrency ? Number(initialPaidUSD) || 0 : undefined,
+      initialPaidUSD: Number(initialPaidUSD) || 0,
       notes,
       containers,
       agencyDocument,
@@ -703,21 +718,80 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         )}
                       </div>
 
-                      <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
-                          الدفعة الأولى / المقدم ({currency === 'USD' ? '$' : 'د.ع'})
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={initialPaid || ''}
-                          onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-emerald-400 font-mono text-sm focus:border-emerald-500 focus:outline-none"
-                        />
-                        {currency === 'USD' && initialPaid > 0 && (
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            المعادل: ≈ <strong className="text-emerald-400">{new Intl.NumberFormat('ar-IQ').format(Math.round(initialPaid * activeRate))} د.ع</strong>
+                      <div className="flex flex-col justify-end">
+                        <div className="p-2 bg-slate-950/60 rounded-xl border border-slate-800 text-[11px] flex items-center justify-between">
+                          <span className="text-slate-400 font-semibold">المتبقي على الزبون:</span>
+                          <span className={`font-mono font-bold ${remaining === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
+                            {formatCurrency(remaining, currency)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Dual-currency initial payment fields */}
+                      <div className="sm:col-span-2 p-3 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                            <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>استلام الدفعة الأولى (المقدم) من الزبون (دينار و/أو دولار معاً):</span>
+                          </span>
+                          {(initialPaid > 0 || (initialPaidUSD || 0) > 0) && (
+                            <span className="text-[11px] font-mono text-emerald-400 font-bold" dir="ltr">
+                              المعادل المخصوم من العقد: {formatCurrency(equivalentInitialInBillCurr, currency)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                              المقبوض نقداً بالدينار (د.ع)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={initialPaid || ''}
+                              onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
+                              placeholder="0 د.ع"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-emerald-400 font-mono text-sm focus:border-emerald-500 focus:outline-none"
+                            />
+                            {currency === 'USD' && initialPaid > 0 && (
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                يعادل: ≈ <strong className="text-emerald-400">${(Math.round((initialPaid / activeRate) * 100) / 100).toLocaleString()}</strong>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                              المقبوض نقداً بالدولار ($)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={initialPaidUSD || ''}
+                              onChange={(e) => setInitialPaidUSD(Number(e.target.value) || 0)}
+                              placeholder="$0"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-cyan-400 font-mono text-sm focus:border-cyan-500 focus:outline-none"
+                            />
+                            {currency === 'IQD' && (initialPaidUSD || 0) > 0 && (
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                يعادل: ≈ <strong className="text-cyan-400">{new Intl.NumberFormat('ar-IQ').format(Math.round((initialPaidUSD || 0) * activeRate))} د.ع</strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Live Treasury Reflection Preview */}
+                        {(initialPaid > 0 || (initialPaidUSD || 0) > 0) && (
+                          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-1">
+                            <span>انعكاس الصندوق اللحظي:</span>
+                            <div className="font-mono font-bold flex items-center gap-2">
+                              {initialPaid > 0 && <span className="text-emerald-400">+{new Intl.NumberFormat('ar-IQ').format(initialPaid)} د.ع (صندوق الدينار)</span>}
+                              {initialPaid > 0 && (initialPaidUSD || 0) > 0 && <span className="text-slate-600">|</span>}
+                              {(initialPaidUSD || 0) > 0 && <span className="text-cyan-400">+${(initialPaidUSD || 0).toLocaleString()} (صندوق الدولار)</span>}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -906,10 +980,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <span className="hidden sm:flex items-center gap-1">
                 <span className="text-slate-500">المقدم:</span>
                 <span className="font-mono font-bold text-emerald-400">
-                  {isMixedCurrency
-                    ? `${new Intl.NumberFormat('ar-IQ').format(initialPaid || 0)} د.ع + $${initialPaidUSD || 0}`
-                    : currency === 'USD'
-                    ? `$${(initialPaid || 0).toLocaleString()}`
+                  {isMixedCurrency || ((initialPaid || 0) > 0 && (initialPaidUSD || 0) > 0)
+                    ? `${new Intl.NumberFormat('ar-IQ').format(initialPaid || 0)} د.ع + $${(initialPaidUSD || 0).toLocaleString()}`
+                    : (initialPaidUSD || 0) > 0
+                    ? `$${(initialPaidUSD || 0).toLocaleString()}`
                     : `${new Intl.NumberFormat('ar-IQ').format(initialPaid || 0)} د.ع`}
                 </span>
               </span>

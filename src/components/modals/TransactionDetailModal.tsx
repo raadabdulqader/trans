@@ -222,16 +222,23 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
               <div className="text-[11px] text-slate-400">المسدد من الزبون:</div>
               <div className="text-sm font-bold text-emerald-400 font-mono mt-1" dir="ltr">
-                {formatCurrency(fin.totalCollected, transaction.currency || 'IQD')}
+                {transaction.isMixedCurrency ? (
+                  <div className="flex flex-col text-xs leading-tight">
+                    <span>{formatCurrency(fin.totalCollected, 'IQD')}</span>
+                    <span className="text-cyan-300">+{formatCurrency(fin.totalCollectedUSD || 0, 'USD')}</span>
+                  </div>
+                ) : (
+                  formatCurrency(fin.totalCollected, transaction.currency || 'IQD')
+                )}
               </div>
-              {transaction.currency === 'USD' && fin.totalCollected > 0 && (
+              {transaction.currency === 'USD' && fin.totalCollected > 0 && !transaction.isMixedCurrency && (
                 <div className="text-[10px] text-emerald-300/80 font-mono mt-0.5">
                   ≈ {new Intl.NumberFormat('ar-IQ').format(Math.round(fin.totalCollected * exchangeRate))} د.ع
                 </div>
               )}
               {((fin.collectedInUSD || 0) > 0 && (fin.collectedInIQD || 0) > 0) && (
                 <div className="text-[10px] text-cyan-300 font-mono mt-0.5" dir="ltr">
-                  (${(fin.collectedInUSD || 0).toLocaleString()} + {new Intl.NumberFormat('ar-IQ').format(fin.collectedInIQD || 0)} د.ع)
+                  (${formatCurrency(fin.collectedInUSD || 0, 'USD')} + {formatCurrency(fin.collectedInIQD || 0, 'IQD')})
                 </div>
               )}
             </div>
@@ -239,9 +246,20 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
               <div className="text-[11px] text-slate-400">المتبقي على الزبون:</div>
               <div className="text-sm font-bold text-amber-400 font-mono mt-1" dir="ltr">
-                {formatCurrency(fin.remainingAmount, transaction.currency || 'IQD')}
+                {transaction.isMixedCurrency ? (
+                  (fin.remainingAmount > 0 || (fin.remainingAmountUSD || 0) > 0) ? (
+                    <div className="flex flex-col text-xs leading-tight">
+                      <span>{formatCurrency(fin.remainingAmount, 'IQD')}</span>
+                      <span className="text-cyan-400">+{formatCurrency(fin.remainingAmountUSD || 0, 'USD')}</span>
+                    </div>
+                  ) : (
+                    <span className="text-emerald-400 font-semibold">0 (خالص)</span>
+                  )
+                ) : (
+                  formatCurrency(fin.remainingAmount, transaction.currency || 'IQD')
+                )}
               </div>
-              {transaction.currency === 'USD' && fin.remainingAmount > 0 && (
+              {transaction.currency === 'USD' && fin.remainingAmount > 0 && !transaction.isMixedCurrency && (
                 <div className="text-[10px] text-amber-300/80 font-mono mt-0.5">
                   ≈ {new Intl.NumberFormat('ar-IQ').format(Math.round(fin.remainingAmount * exchangeRate))} د.ع
                 </div>
@@ -786,19 +804,27 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               <span>🏦 سلفة للمخلص</span>
             </button>
 
-            <button
-              onClick={onOpenQuickPayment}
-              disabled={transaction.status === 'cancelled' || fin.remainingAmount <= 0}
-              className={`px-3 py-2 font-bold rounded-xl transition flex items-center gap-1.5 ${
-                transaction.status === 'cancelled' || fin.remainingAmount <= 0
-                  ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
-                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-              }`}
-              title={transaction.status === 'cancelled' ? 'لا يمكن قبض مبالغ لبوليصة ملغاة' : fin.remainingAmount <= 0 ? 'البوليصة مسددة بالكامل (خالصة)' : 'تسجيل دفعة من الزبون'}
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span>💳 دفعة من الزبون {transaction.status === 'cancelled' ? '(ملغاة)' : fin.remainingAmount <= 0 ? '(خالصة)' : ''}</span>
-            </button>
+            {(() => {
+              const isFullyPaid = transaction.isMixedCurrency
+                ? (fin.remainingAmount <= 0 && (fin.remainingAmountUSD || 0) <= 0)
+                : fin.remainingAmount <= 0;
+              const isDisabled = transaction.status === 'cancelled' || isFullyPaid;
+              return (
+                <button
+                  onClick={onOpenQuickPayment}
+                  disabled={isDisabled}
+                  className={`px-3 py-2 font-bold rounded-xl transition flex items-center gap-1.5 ${
+                    isDisabled
+                      ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
+                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  }`}
+                  title={transaction.status === 'cancelled' ? 'لا يمكن قبض مبالغ لبوليصة ملغاة' : isFullyPaid ? 'البوليصة مسددة بالكامل (خالصة)' : 'تسجيل دفعة من الزبون'}
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>💳 دفعة من الزبون {transaction.status === 'cancelled' ? '(ملغاة)' : isFullyPaid ? '(خالصة)' : ''}</span>
+                </button>
+              );
+            })()}
 
             <button
               onClick={onOpenAttachments}

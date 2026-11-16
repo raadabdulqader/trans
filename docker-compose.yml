@@ -3,36 +3,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nakah-customs-app
     restart: always
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:nakah_db_secret_pass@postgres:5432/nakah?schema=public
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:IkDIb1xtSGD0h3npwkamWDpmuMtS8MWdEPZlSfrDlK98hqjLDxnOORviN1qLoztg@braevxc4eupdu1jszbmswgrr:5432/postgres}
       - NODE_ENV=production
       - PORT=3000
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://trans.mdd-iq.com}
+    networks:
+      - coolify
+      - default
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: nakah-customs-db
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=nakah_db_secret_pass
-      - POSTGRES_DB=nakah
-    volumes:
-      - nakah_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d nakah"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  nakah_pgdata:
-    driver: local
+networks:
+  default:
+  coolify:
+    name: coolify
+    external: true

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wallet, DollarSign, RefreshCw } from 'lucide-react';
+import { X, Wallet, DollarSign, RefreshCw, SplitSquareVertical } from 'lucide-react';
 import { Transaction, Receipt, Currency } from '../../types/customs';
-import { formatCurrency, getBillFinancials, getReceiptBreakdownForBill, normalizeExchangeRate } from '../../utils/storage';
+import { formatCurrency, getBillFinancials, normalizeExchangeRate } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
 import { CommissionSection } from '../ui/CommissionSection';
 import { CommissionPayload } from './QuickAdvanceModal';
@@ -19,9 +19,15 @@ export interface QuickPaymentModalProps {
     notes: string,
     commission?: CommissionPayload,
     paymentCurrency?: Currency,
-    customExchangeRate?: number
+    customExchangeRate?: number,
+    dualPayment?: {
+      amountIQD: number;
+      amountUSD: number;
+    }
   ) => void;
 }
+
+export type PaymentMode = 'IQD' | 'USD' | 'split';
 
 export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
   isOpen,
@@ -32,10 +38,10 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [currency, setCurrency] = useState<Currency>('IQD');
+  const [payMode, setPayMode] = useState<PaymentMode>('IQD');
   const [customRate, setCustomRate] = useState<number>(normalizeExchangeRate(exchangeRate, 1500));
-  const [isAutoRemaining, setIsAutoRemaining] = useState<boolean>(true);
-  const [amount, setAmount] = useState<number>(0);
+  const [amountIQD, setAmountIQD] = useState<number>(0);
+  const [amountUSD, setAmountUSD] = useState<number>(0);
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -64,78 +70,124 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
 
   useEffect(() => {
     if (transaction && isOpen) {
-      const initCurr: Currency = transaction.currency === 'USD' ? 'USD' : 'IQD';
       const initRate = normalizeExchangeRate(exchangeRate || transaction.exchangeRate, 1500);
       const currentFin = getBillFinancials(transaction, receipts, initRate);
-      setCurrency(initCurr);
       setCustomRate(initRate);
-      setIsAutoRemaining(true);
-      setAmount(currentFin.remainingAmount > 0 ? currentFin.remainingAmount : 0);
+
+      if (transaction.isMixedCurrency) {
+        // Mixed bill default to split if both currencies have remaining, or the one with remaining
+        if (currentFin.remainingAmount > 0 && (currentFin.remainingAmountUSD || 0) > 0) {
+          setPayMode('split');
+          setAmountIQD(currentFin.remainingAmount);
+          setAmountUSD(currentFin.remainingAmountUSD || 0);
+        } else if ((currentFin.remainingAmountUSD || 0) > 0) {
+          setPayMode('USD');
+          setAmountIQD(0);
+          setAmountUSD(currentFin.remainingAmountUSD || 0);
+        } else {
+          setPayMode('IQD');
+          setAmountIQD(currentFin.remainingAmount > 0 ? currentFin.remainingAmount : 0);
+          setAmountUSD(0);
+        }
+      } else if (transaction.currency === 'USD') {
+        setPayMode('USD');
+        setAmountUSD(currentFin.remainingAmount > 0 ? currentFin.remainingAmount : 0);
+        setAmountIQD(0);
+      } else {
+        setPayMode('IQD');
+        setAmountIQD(currentFin.remainingAmount > 0 ? currentFin.remainingAmount : 0);
+        setAmountUSD(0);
+      }
+
       setDate(new Date().toISOString().split('T')[0]);
       setNotes(`دفعة سداد حساب بوليصة ${transaction.billNo}`);
       setErrorMsg('');
       setHasCommission(false);
       setCommissionAmount(0);
-      setCommissionCurrency(initCurr);
+      setCommissionCurrency(transaction.currency === 'USD' ? 'USD' : 'IQD');
       setCommissionBearer('company');
     }
   }, [transaction, isOpen, exchangeRate]);
 
   if (!isOpen || !transaction || !fin) return null;
 
-  const previewBreakdown = getReceiptBreakdownForBill(
-    {
-      id: 'preview',
-      receiptNo: 'PREVIEW',
-      type: 'payment',
-      billId: transaction.id,
-      amount: Number(amount) || 0,
-      currency,
-      exchangeRate: activeRate,
-      hasCommission,
-      commissionAmount: hasCommission ? Number(commissionAmount) || 0 : 0,
-      commissionCurrency,
-      commissionBearer,
-      date,
-      notes,
-      createdAt: date,
-    },
-    billCurr,
-    activeRate
-  );
+  const isMixed = !!transaction.isMixedCurrency;
+  const isFullyPaid = isMixed
+    ? fin.remainingAmount <= 0 && (fin.remainingAmountUSD || 0) <= 0
+    : fin.remainingAmount <= 0;
 
-  const isOverRemaining = previewBreakdown.netCreditInBillCurrency > fin.remainingAmount + 0.05;
-  const isFullyPaid = fin.remainingAmount <= 0;
-  const newRemainingOnBill = Math.max(0, Math.round((fin.remainingAmount - previewBreakdown.netCreditInBillCurrency) * 100) / 100);
+  // Total remaining on bill in terms of bill reference currency (IQD for mixed/IQD, USD for USD)
+  const totalRemainingInRefCurr = isMixed
+    ? fin.remainingAmount + Math.round((fin.remainingAmountUSD || 0) * activeRate)
+    : fin.remainingAmount;
 
-  const companyCommissionInPaymentCurr =
-    hasCommission && commissionBearer === 'company' && commissionAmount > 0
-      ? commissionCurrency === currency
-        ? commissionAmount
-        : commissionCurrency === 'USD' && currency === 'IQD'
-        ? Math.round(commissionAmount * activeRate)
-        : Math.round((commissionAmount / activeRate) * 100) / 100
-      : 0;
-  const netCashboxAmount = Math.max(0, (Number(amount) || 0) - companyCommissionInPaymentCurr);
-
-  const computeRemainingInCurrency = (targetCurr: Currency, rateToUse: number, remainingInBillCurr: number) => {
-    const safeRate = normalizeExchangeRate(rateToUse, 1500);
-    if (remainingInBillCurr <= 0) return 0;
-    if (targetCurr === billCurr) return remainingInBillCurr;
-    if (billCurr === 'USD' && targetCurr === 'IQD') {
-      return Math.round(remainingInBillCurr * safeRate);
+  // Credit calculation towards bill debt
+  let effectiveCreditInRefCurr = 0;
+  if (payMode === 'IQD') {
+    if (billCurr === 'USD' && !isMixed) {
+      effectiveCreditInRefCurr = activeRate > 0 ? Math.round((amountIQD / activeRate) * 100) / 100 : 0;
+    } else {
+      effectiveCreditInRefCurr = amountIQD;
     }
-    return Math.round((remainingInBillCurr / safeRate) * 100) / 100;
-  };
+  } else if (payMode === 'USD') {
+    if (billCurr === 'USD' && !isMixed) {
+      effectiveCreditInRefCurr = amountUSD;
+    } else {
+      effectiveCreditInRefCurr = Math.round(amountUSD * activeRate);
+    }
+  } else {
+    // split payment
+    if (billCurr === 'USD' && !isMixed) {
+      effectiveCreditInRefCurr = amountUSD + (activeRate > 0 ? Math.round((amountIQD / activeRate) * 100) / 100 : 0);
+    } else {
+      effectiveCreditInRefCurr = amountIQD + Math.round(amountUSD * activeRate);
+    }
+  }
 
-  const handleCurrencySwitch = (newCurr: Currency) => {
-    if (newCurr === currency) return;
-    setCurrency(newCurr);
-    setCommissionCurrency(newCurr);
+  const isOverRemaining = effectiveCreditInRefCurr > totalRemainingInRefCurr + 0.05;
+  const newRemainingRef = Math.max(0, Math.round((totalRemainingInRefCurr - effectiveCreditInRefCurr) * 100) / 100);
+
+  // Cashbox net impact
+  const netCashboxIQD = payMode === 'USD' ? 0 : Math.max(0, amountIQD - (hasCommission && commissionBearer === 'company' && commissionCurrency === 'IQD' ? commissionAmount : 0));
+  const netCashboxUSD = payMode === 'IQD' ? 0 : Math.max(0, amountUSD - (hasCommission && commissionBearer === 'company' && commissionCurrency === 'USD' ? commissionAmount : 0));
+
+  const handleModeSwitch = (newMode: PaymentMode) => {
+    if (newMode === payMode) return;
+    setPayMode(newMode);
     setErrorMsg('');
-    if (fin.remainingAmount > 0) {
-      setIsAutoRemaining(true);
-      setAmount(computeRemainingInCurrency(newCurr, activeRate, fin.remainingAmount));
+
+    if (newMode === 'IQD') {
+      setAmountUSD(0);
+      if (isMixed) {
+        setAmountIQD(fin.remainingAmount > 0 ? fin.remainingAmount : Math.round((fin.remainingAmountUSD || 0) * activeRate));
+      } else if (billCurr === 'USD') {
+        setAmountIQD(Math.round(fin.remainingAmount * activeRate));
+      } else {
+        setAmountIQD(fin.remainingAmount);
+      }
+    } else if (newMode === 'USD') {
+      setAmountIQD(0);
+      if (isMixed) {
+        setAmountUSD((fin.remainingAmountUSD || 0) > 0 ? (fin.remainingAmountUSD || 0) : Math.round((fin.remainingAmount / activeRate) * 100) / 100);
+      } else if (billCurr === 'USD') {
+        setAmountUSD(fin.remainingAmount);
+      } else {
+        setAmountUSD(Math.round((fin.remainingAmount / activeRate) * 100) / 100);
+      }
+    } else {
+      // split mode
+      if (isMixed) {
+        setAmountIQD(fin.remainingAmount > 0 ? fin.remainingAmount : 0);
+        setAmountUSD((fin.remainingAmountUSD || 0) > 0 ? (fin.remainingAmountUSD || 0) : 0);
+      } else if (billCurr === 'USD') {
+        const halfUSD = Math.round((fin.remainingAmount / 2) * 100) / 100;
+        setAmountUSD(halfUSD);
+        setAmountIQD(Math.round((fin.remainingAmount - halfUSD) * activeRate));
+      } else {
+        const halfIQD = Math.round(fin.remainingAmount / 2);
+        setAmountIQD(halfIQD);
+        setAmountUSD(Math.round(((fin.remainingAmount - halfIQD) / activeRate) * 100) / 100);
+      }
     }
   };
 
@@ -143,43 +195,71 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
     const rawNum = rawVal === '' ? 0 : Number(rawVal);
     setCustomRate(rawNum);
     setErrorMsg('');
-    if (rawNum >= 100) {
-      const normalized = normalizeExchangeRate(rawNum, 1500);
-      if (fin.remainingAmount > 0 && currency !== billCurr && isAutoRemaining) {
-        setAmount(computeRemainingInCurrency(currency, normalized, fin.remainingAmount));
-      }
-      if (onExchangeRateChange) {
-        onExchangeRateChange(normalized, true);
-      }
+    if (rawNum >= 100 && onExchangeRateChange) {
+      onExchangeRateChange(normalizeExchangeRate(rawNum, 1500), true);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
-    if (amount <= 0) return;
-    if (previewBreakdown.netCreditInBillCurrency > fin.remainingAmount + 0.05) {
+
+    const totalPaidInput = (payMode !== 'USD' ? amountIQD : 0) + (payMode !== 'IQD' ? amountUSD : 0);
+    if (totalPaidInput <= 0) {
+      setErrorMsg('يرجى إدخال مبلغ صحيح للدفعة');
+      return;
+    }
+
+    if (effectiveCreditInRefCurr > totalRemainingInRefCurr + 0.05) {
       setErrorMsg(
-        `لا يجوز أن يكون الصافي المسدد للبوليصة (${formatCurrency(previewBreakdown.netCreditInBillCurrency, billCurr)}) أكبر من المتبقي المستحق (${formatCurrency(fin.remainingAmount, billCurr)})`
+        `لا يجوز أن يكون الصافي المسدد (${formatCurrency(effectiveCreditInRefCurr, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')}) أكبر من المتبقي المستحق (${formatCurrency(totalRemainingInRefCurr, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')})`
       );
       return;
     }
+
     if (activeRate >= 100 && onExchangeRateChange) {
       onExchangeRateChange(activeRate, true);
     }
-    onSave(
-      amount,
-      date,
-      notes,
-      {
-        hasCommission,
-        commissionAmount: hasCommission ? Number(commissionAmount) : 0,
-        commissionCurrency: hasCommission ? commissionCurrency : currency,
-        commissionBearer: hasCommission ? commissionBearer : 'company',
-      },
-      currency,
-      activeRate
-    );
+
+    const commissionPayload: CommissionPayload = {
+      hasCommission,
+      commissionAmount: hasCommission ? Number(commissionAmount) : 0,
+      commissionCurrency: hasCommission ? commissionCurrency : (payMode === 'USD' ? 'USD' : 'IQD'),
+      commissionBearer: hasCommission ? commissionBearer : 'company',
+    };
+
+    if (payMode === 'split') {
+      onSave(
+        amountIQD,
+        date,
+        notes,
+        commissionPayload,
+        'IQD',
+        activeRate,
+        {
+          amountIQD,
+          amountUSD,
+        }
+      );
+    } else if (payMode === 'USD') {
+      onSave(
+        amountUSD,
+        date,
+        notes,
+        commissionPayload,
+        'USD',
+        activeRate
+      );
+    } else {
+      onSave(
+        amountIQD,
+        date,
+        notes,
+        commissionPayload,
+        'IQD',
+        activeRate
+      );
+    }
   };
 
   return (
@@ -190,7 +270,7 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Wallet className="w-4 h-4 text-emerald-400" />
-              <span>تسجيل دفعة من الزبون (بوليصة {transaction.billNo})</span>
+              <span>تسجيل استلام دفعة من الزبون (بوليصة {transaction.billNo})</span>
             </h2>
             {transaction.goodsType && (
               <span className="text-[11px] px-2.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
@@ -218,83 +298,138 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
             <>
               {/* 2-Column Main Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                {/* Right Column: Payment Currency, Amount & Exchange Rate */}
+                {/* Right Column: Currency & Amount Selection */}
                 <div className="space-y-3 bg-slate-950/40 p-3.5 rounded-2xl border border-slate-800/80">
+                  {/* Remaining Debt Status Banner */}
                   <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
                     <span className="text-slate-400 font-semibold">المتبقي على البوليصة حالياً:</span>
-                    <span className={`font-mono font-bold text-sm ${fin.remainingAmount === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
-                      {formatCurrency(fin.remainingAmount, billCurr)}
-                    </span>
+                    <div className="text-right">
+                      {isMixed ? (
+                        <div className="font-mono font-bold text-sm text-amber-400" dir="ltr">
+                          {formatCurrency(fin.remainingAmount, 'IQD')} + {formatCurrency(fin.remainingAmountUSD || 0, 'USD')}
+                        </div>
+                      ) : (
+                        <span className={`font-mono font-bold text-sm ${fin.remainingAmount === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
+                          {formatCurrency(fin.remainingAmount, billCurr)}
+                        </span>
+                      )}
+                      {((isMixed && (fin.remainingAmountUSD || 0) > 0) || (billCurr === 'USD' && fin.remainingAmount > 0)) && (
+                        <div className="text-[10px] text-slate-400 font-mono" dir="ltr">
+                          ≈ {new Intl.NumberFormat('ar-IQ').format(totalRemainingInRefCurr)} د.ع
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Currency Selector */}
-                  <div className="p-2 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-                    <span className="text-slate-300 font-semibold text-[11px] flex items-center gap-1 shrink-0">
+                  {/* Payment Mode Selector: IQD / USD / Split */}
+                  <div className="p-2 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
+                    <div className="text-slate-300 font-semibold text-[11px] flex items-center gap-1">
                       <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>عملة الدفعة:</span>
-                    </span>
-                    <div className="grid grid-cols-2 gap-1.5 flex-1">
+                      <span>طريقة وعملة القبض من الزبون:</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleCurrencySwitch('IQD')}
+                        onClick={() => handleModeSwitch('IQD')}
                         className={`py-1.5 px-2 rounded-lg font-bold transition border text-[11px] ${
-                          currency === 'IQD'
+                          payMode === 'IQD'
                             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                             : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                         }`}
                       >
-                        🇮🇶 دينار (IQD)
+                        🇮🇶 دينار فقط
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleCurrencySwitch('USD')}
+                        onClick={() => handleModeSwitch('USD')}
                         className={`py-1.5 px-2 rounded-lg font-bold transition border text-[11px] ${
-                          currency === 'USD'
+                          payMode === 'USD'
                             ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
                             : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                         }`}
                       >
-                        🇺🇸 دولار ($)
+                        🇺🇸 دولار فقط
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleModeSwitch('split')}
+                        className={`py-1.5 px-2 rounded-lg font-bold transition border text-[11px] flex items-center justify-center gap-1 ${
+                          payMode === 'split'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <SplitSquareVertical className="w-3 h-3" />
+                        <span>دينار + دولار معاً</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Payment Amount Input */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-slate-300 font-semibold text-xs">
-                        مبلغ الدفعة ({currency === 'USD' ? 'دولار $' : 'د.ع'}) <span className="text-rose-400">*</span>
-                      </label>
-                      {amount > 0 && (
-                        <span className="text-[11px] font-mono font-bold text-emerald-400" dir="ltr">
-                          {formatCurrency(amount, currency)}
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      min="1"
-                      step="any"
-                      required
-                      value={amount === 0 ? '' : amount}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setIsAutoRemaining(false);
-                        setAmount(val === '' ? 0 : Number(val));
-                      }}
-                      className={`w-full bg-slate-950 border rounded-xl px-3 py-2 font-mono font-bold focus:outline-none ${
-                        isOverRemaining
-                          ? 'border-rose-500 text-rose-400 focus:border-rose-500'
-                          : 'border-slate-700 text-emerald-400 focus:border-emerald-500'
-                      }`}
-                    />
+                  {/* Payment Input Fields */}
+                  <div className="space-y-2.5">
+                    {(payMode === 'IQD' || payMode === 'split') && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-slate-300 font-semibold text-xs">
+                            المقبوض نقداً بالدينار (د.ع) <span className="text-rose-400">*</span>
+                          </label>
+                          {amountIQD > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400" dir="ltr">
+                              {formatCurrency(amountIQD, 'IQD')}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          required={payMode === 'IQD'}
+                          value={amountIQD === 0 ? '' : amountIQD}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAmountIQD(val === '' ? 0 : Number(val));
+                          }}
+                          placeholder="0 د.ع"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 font-mono font-bold text-emerald-400 focus:border-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                    )}
 
-                    {currency !== billCurr && (
-                      <div className="mt-2.5 p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl space-y-1.5 text-[11px]">
+                    {(payMode === 'USD' || payMode === 'split') && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-slate-300 font-semibold text-xs">
+                            المقبوض نقداً بالدولار ($) <span className="text-rose-400">*</span>
+                          </label>
+                          {amountUSD > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-cyan-400" dir="ltr">
+                              {formatCurrency(amountUSD, 'USD')}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          required={payMode === 'USD'}
+                          value={amountUSD === 0 ? '' : amountUSD}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAmountUSD(val === '' ? 0 : Number(val));
+                          }}
+                          placeholder="$0"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 font-mono font-bold text-cyan-400 focus:border-cyan-500 focus:outline-none"
+                        />
+                      </div>
+                    )}
+
+                    {/* Exchange Rate Input for Conversion */}
+                    {(payMode !== 'IQD' || billCurr === 'USD' || isMixed) && (
+                      <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded-xl space-y-1.5 text-[11px]">
                         <div className="flex items-center justify-between gap-2">
                           <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
                             <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-                            <span>سعر الصرف (1$ أو 100$):</span>
+                            <span>سعر الصرف المعتمد (1$ أو 100$):</span>
                             <input
                               type="number"
                               min="1"
@@ -306,24 +441,24 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
                             />
                           </span>
                           <span className="text-slate-200 font-semibold">
-                            يعادل: <strong className="font-mono text-emerald-400 text-sm" dir="ltr">{formatCurrency(previewBreakdown.grossInBillCurrency, billCurr)}</strong>
+                            المعادل الكلي: <strong className="font-mono text-emerald-400 text-sm" dir="ltr">{formatCurrency(effectiveCreditInRefCurr, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')}</strong>
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                          <span>السعر المعتمد للتحويل: 1$ = {activeRate.toLocaleString('ar-IQ')} د.ع (100$ = {Math.round(activeRate * 100).toLocaleString('ar-IQ')} د.ع)</span>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          1$ = {activeRate.toLocaleString('ar-IQ')} د.ع (100$ = {Math.round(activeRate * 100).toLocaleString('ar-IQ')} د.ع)
                         </div>
                       </div>
                     )}
 
                     {isOverRemaining && (
                       <p className="text-[11px] text-rose-400 mt-1.5 font-semibold">
-                        ⚠️ الصافي المحتسب للبوليصة ({formatCurrency(previewBreakdown.netCreditInBillCurrency, billCurr)}) أكبر من المتبقي ({formatCurrency(fin.remainingAmount, billCurr)})
+                        ⚠️ الصافي المحتسب ({formatCurrency(effectiveCreditInRefCurr, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')}) أكبر من المتبقي المستحق ({formatCurrency(totalRemainingInRefCurr, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')})
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Left Column: Date, Notes & Live Accounting Summary */}
+                {/* Left Column: Date, Notes & Live Reflection Box */}
                 <div className="space-y-3 bg-slate-950/40 p-3.5 rounded-2xl border border-slate-800/80">
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">التاريخ</label>
@@ -334,39 +469,33 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
                     />
                   </div>
 
-                  {/* Live Reflection Preview Box */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-[11px]">
+                  {/* Live Accounting Summary Box */}
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-[11px]">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">صافي انعكاس الصندوق:</span>
-                      <div className="flex items-center gap-1.5">
-                        <strong className="font-mono text-emerald-400 text-xs" dir="ltr">
-                          +{formatCurrency(netCashboxAmount, currency)}
-                        </strong>
-                        {hasCommission && commissionAmount > 0 && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                            commissionBearer === 'company'
-                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                              : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                          }`}>
-                            {commissionBearer === 'company'
-                              ? `خُصمت عمولة الشركة (-${formatCurrency(commissionAmount, commissionCurrency)})`
-                              : 'عمولة على الزبون (لا تؤثر على الصندوق)'}
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-slate-400">انعكاس صندوق الدينار:</span>
+                      <strong className="font-mono text-emerald-400 text-xs" dir="ltr">
+                        +{formatCurrency(netCashboxIQD, 'IQD')}
+                      </strong>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">يُحتسب لتسديد البوليصة (الحوالة):</span>
-                      <strong className="font-mono text-cyan-300 text-xs" dir="ltr">
-                        {formatCurrency(previewBreakdown.netCreditInBillCurrency, billCurr)}
+                      <span className="text-slate-400">انعكاس صندوق الدولار:</span>
+                      <strong className="font-mono text-cyan-400 text-xs" dir="ltr">
+                        +{formatCurrency(netCashboxUSD, 'USD')}
+                      </strong>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                      <span className="text-slate-400">الخصم من ذمة الزبون:</span>
+                      <strong className="font-mono text-white text-xs" dir="ltr">
+                        -{formatCurrency(effectiveCreditInRefCurr, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')}
                       </strong>
                     </div>
 
                     <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
                       <span className="text-slate-400">المتبقي الجديد على الزبون:</span>
-                      <strong className={`font-mono text-xs ${newRemainingOnBill === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
-                        {formatCurrency(newRemainingOnBill, billCurr)}
+                      <strong className={`font-mono text-xs ${newRemainingRef === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
+                        {formatCurrency(newRemainingRef, billCurr === 'USD' && !isMixed ? 'USD' : 'IQD')}
                       </strong>
                     </div>
                   </div>
@@ -393,8 +522,8 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
                 onCurrencyChange={setCommissionCurrency}
                 commissionBearer={commissionBearer}
                 onBearerChange={setCommissionBearer}
-                baseAmount={Number(amount) || 0}
-                baseCurrency={currency}
+                baseAmount={payMode === 'USD' ? amountUSD : amountIQD}
+                baseCurrency={payMode === 'USD' ? 'USD' : 'IQD'}
                 partyLabel="الزبون"
                 exchangeRate={activeRate}
               />
@@ -404,18 +533,12 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
           {/* Footer Action Buttons */}
           <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
             <div className="text-[11px] text-slate-400">
-              {hasCommission && commissionAmount > 0 ? (
-                commissionBearer === 'company' ? (
-                  <span className="text-emerald-300">
-                    💡 العمولة على الشركة ({formatCurrency(commissionAmount, commissionCurrency)}) تُستقطع من مبلغ الدفعة الداخلة للصندوق.
-                  </span>
-                ) : (
-                  <span className="text-amber-300">
-                    💡 العمولة على الزبون ({formatCurrency(commissionAmount, commissionCurrency)}) لا تؤثر على الحوالة أو الصندوق.
-                  </span>
-                )
+              {payMode === 'split' ? (
+                <span className="text-amber-300">
+                  💡 سيتم إنشاء سندي قبض منفصلين: سند بالدينار في صندوق الدينار، وسند بالدولار في صندوق الدولار مع ربطهما بالبوليصة.
+                </span>
               ) : (
-                <span>يرجى التأكد من عملة الدفعة والمبلغ قبل الحفظ.</span>
+                <span>يتم إيداع المبلغ المقبوض مباشرة في الصندوق الخاص بتلك العملة.</span>
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -424,9 +547,9 @@ export const QuickPaymentModal: React.FC<QuickPaymentModalProps> = ({
               </button>
               <button 
                 type="submit" 
-                disabled={isFullyPaid || isOverRemaining || amount <= 0}
+                disabled={isFullyPaid || isOverRemaining || ((payMode !== 'USD' ? amountIQD : 0) + (payMode !== 'IQD' ? amountUSD : 0) <= 0)}
                 className={`px-5 py-1.5 rounded-xl font-bold transition ${
-                  isFullyPaid || isOverRemaining || amount <= 0
+                  isFullyPaid || isOverRemaining || ((payMode !== 'USD' ? amountIQD : 0) + (payMode !== 'IQD' ? amountUSD : 0) <= 0)
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-md shadow-emerald-500/20'
                 }`}
