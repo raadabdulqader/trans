@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: always
-    ports:
-      - "3000:3000"
+    expose:
+      - 3000
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgres://postgres:IkDIb1xtSGD0h3npwkamWDpmuMtS8MWdEPZlSfrDlK98hqjLDxnOORviN1qLoztg@braevxc4eupdu1jszbmswgrr:5432/postgres}
       - NODE_ENV=production
