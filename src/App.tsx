@@ -470,11 +470,13 @@ export default function App() {
   // Transaction Save
   const handleSaveTransaction = (txData: Omit<Transaction, 'id' | 'createdAt'> & { id?: string }) => {
     const totalAmount = Math.max(0, Number(txData.totalAmount) || 0);
+    const totalAmountUSD = txData.isMixedCurrency ? Math.max(0, Number(txData.totalAmountUSD) || 0) : undefined;
     const initialPaid = Math.max(0, Number(txData.initialPaid) || 0);
     const initialPaidUSD = Math.max(0, Number(txData.initialPaidUSD) || 0);
     const safeTxData = {
       ...txData,
       totalAmount,
+      totalAmountUSD,
       initialPaid,
       initialPaidUSD,
     };

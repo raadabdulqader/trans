@@ -171,10 +171,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const isInitialExceeded = isMixedCurrency
     ? (totalAmount > 0 && initialPaid > totalAmount)
     : (totalAmount > 0 && equivalentInitialInBillCurr > totalAmount + 0.05);
-  const isInitialUSDExceeded = isMixedCurrency && totalAmountUSD > 0 && initialPaidUSD > totalAmountUSD;
-  const isTotalLessThanExisting = existingPayments > 0 && totalAmount < (existingPayments + Math.min(totalAmount, equivalentInitialInBillCurr));
-  const remaining = Math.max(0, Math.round((totalAmount - Math.min(totalAmount, equivalentInitialInBillCurr) - existingPayments) * 100) / 100);
-  const remainingUSD = Math.max(0, totalAmountUSD - Math.min(totalAmountUSD, initialPaidUSD));
+  const existingPaymentsUSD = existingFin?.additionalPaymentsUSD || 0;
+  const isInitialUSDExceeded = isMixedCurrency && (totalAmountUSD || 0) > 0 && (initialPaidUSD || 0) > (totalAmountUSD || 0);
+  const isTotalLessThanExisting = isMixedCurrency
+    ? (existingPayments > 0 && totalAmount < (existingPayments + Math.min(totalAmount, initialPaid))) ||
+      (existingPaymentsUSD > 0 && (totalAmountUSD || 0) < (existingPaymentsUSD + Math.min(totalAmountUSD || 0, initialPaidUSD || 0)))
+    : (existingPayments > 0 && totalAmount < (existingPayments + Math.min(totalAmount, equivalentInitialInBillCurr)));
+  const remaining = Math.max(0, Math.round((totalAmount - Math.min(totalAmount, isMixedCurrency ? initialPaid : equivalentInitialInBillCurr) - existingPayments) * 100) / 100);
+  const remainingUSD = Math.max(0, Math.round(((totalAmountUSD || 0) - Math.min(totalAmountUSD || 0, initialPaidUSD || 0) - existingPaymentsUSD) * 100) / 100);
 
   // Check if there are active carrier payments disbursed from treasury on this bill
   const activeCarrierPaymentsOnBill = (treasury || []).filter(
@@ -668,7 +672,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <span>(1$ = {activeRate.toLocaleString('ar-IQ')} د.ع)</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => { setIsMixedCurrency(false); setCurrency('IQD'); }}
@@ -678,7 +682,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                           : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                       }`}
                     >
-                      🇮🇶 دينار (IQD)
+                      🇮🇶 دينار فقط (IQD)
                     </button>
                     <button
                       type="button"
@@ -689,7 +693,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                           : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                       }`}
                     >
-                      🇺🇸 دولار ($)
+                      🇺🇸 دولار فقط ($)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsMixedCurrency(true); setCurrency('IQD'); }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition border flex items-center justify-center gap-1 ${
+                        isMixedCurrency
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
+                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <span>🔄 دينار + دولار معاً</span>
                     </button>
                   </div>
                 </div>
@@ -842,68 +857,131 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ) : (
                   <>
                     {/* Mixed Currency Section (د.ع + $) */}
-                    <div className="space-y-2.5 p-2.5 bg-slate-950/60 rounded-xl border border-amber-500/20">
-                      <div className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
-                        <span>🏛️ رسوم ومصاريف محلية (بالدينار العراقي):</span>
+                    <div className="space-y-3 p-3.5 bg-slate-950/70 rounded-2xl border border-amber-500/30">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                        <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                          <Coins className="w-4 h-4 text-amber-400" />
+                          <span>تحديد اتفاق البوليصة بالعملتين مع الزبون (دينار + دولار معاً):</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          سعر الصرف المعتمد: 1$ = {activeRate.toLocaleString('ar-IQ')} د.ع
+                        </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-slate-400 text-[10px] mb-1">المبلغ (د.ع) *</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={totalAmount || ''}
-                            onChange={(e) => setTotalAmount(Number(e.target.value) || 0)}
-                            placeholder="المبلغ بالدينار..."
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
-                          />
+
+                      {/* Part 1: IQD Agreement */}
+                      <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                            <span>🇮🇶 الشق الأول: اتفاق الدينار العراقي (د.ع)</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            المتبقي بالدينار: <strong className={`font-mono ${remaining === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">{formatCurrency(remaining, 'IQD')}</strong>
+                          </span>
                         </div>
-                        <div>
-                          <label className="block text-slate-400 text-[10px] mb-1">المقدم (د.ع)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={initialPaid || ''}
-                            onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
-                            placeholder="المدفوع دينار..."
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-emerald-400 font-mono"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                              المبلغ الكلي بالدينار (د.ع) <span className="text-rose-400">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={totalAmount === 0 ? '' : totalAmount}
+                              onChange={(e) => setTotalAmount(Number(e.target.value) || 0)}
+                              placeholder="مثال: 1,000 د.ع أو 5,000,000 د.ع"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                              المقدم المقبوض بالدينار (د.ع)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={initialPaid === 0 ? '' : initialPaid}
+                              onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
+                              placeholder="0 د.ع"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:border-emerald-500 focus:outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <div className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5 pt-1 border-t border-slate-800">
-                        <span>🚢 أجور شحن بحري (بالدولار الأمريكي):</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-slate-400 text-[10px] mb-1">المبلغ ($) *</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={totalAmountUSD || ''}
-                            onChange={(e) => setTotalAmountUSD(Number(e.target.value) || 0)}
-                            placeholder="المبلغ بالدولار..."
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono"
-                          />
+                      {/* Part 2: USD Agreement */}
+                      <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-cyan-400 flex items-center gap-1">
+                            <span>🇺🇸 الشق الثاني: اتفاق الدولار الأمريكي ($)</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            المتبقي بالدولار: <strong className={`font-mono ${remainingUSD === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">{formatCurrency(remainingUSD, 'USD')}</strong>
+                          </span>
                         </div>
-                        <div>
-                          <label className="block text-slate-400 text-[10px] mb-1">المقدم ($)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={initialPaidUSD || ''}
-                            onChange={(e) => setInitialPaidUSD(Number(e.target.value) || 0)}
-                            placeholder="المدفوع دولار..."
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-cyan-400 font-mono"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                              المبلغ الكلي بالدولار ($) <span className="text-rose-400">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={totalAmountUSD === 0 ? '' : totalAmountUSD}
+                              onChange={(e) => setTotalAmountUSD(Number(e.target.value) || 0)}
+                              placeholder="مثال: $500 أو $2,000"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:border-cyan-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                              المقدم المقبوض بالدولار ($)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={initialPaidUSD === 0 ? '' : initialPaidUSD}
+                              onChange={(e) => setInitialPaidUSD(Number(e.target.value) || 0)}
+                              placeholder="$0"
+                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-cyan-400 font-mono font-bold focus:border-cyan-500 focus:outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400">الإجمالي المعادل:</span>
-                        <strong className="text-emerald-400 font-mono font-bold" dir="ltr">
-                          {new Intl.NumberFormat('ar-IQ').format((totalAmount || 0) + (totalAmountUSD || 0) * (exchangeRate || 1500))} د.ع
-                        </strong>
+                      {/* Mixed Contract Live Summary Box */}
+                      <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5 text-[11px]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-semibold">المبلغ الإجمالي المتفق عليه:</span>
+                          <span className="font-mono font-bold text-white text-xs" dir="ltr">
+                            {formatCurrency(totalAmount || 0, 'IQD')} + {formatCurrency(totalAmountUSD || 0, 'USD')}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                          <span>المعادل التقديري الإجمالي:</span>
+                          <span className="font-mono text-emerald-400 font-bold" dir="ltr">
+                            ≈ {new Intl.NumberFormat('ar-IQ').format((totalAmount || 0) + ((totalAmountUSD || 0) * activeRate))} د.ع
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                          <span className="text-slate-400 font-semibold">المتبقي الصافي بذمة الزبون:</span>
+                          <span className="font-mono font-bold text-amber-400 text-xs" dir="ltr">
+                            {formatCurrency(remaining, 'IQD')} + {formatCurrency(remainingUSD, 'USD')}
+                          </span>
+                        </div>
+                        {(initialPaid > 0 || (initialPaidUSD || 0) > 0) && (
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px] text-slate-400">
+                            <span>انعكاس الصندوق اللحظي:</span>
+                            <div className="font-mono font-bold flex items-center gap-2">
+                              {initialPaid > 0 && <span className="text-emerald-400">+{new Intl.NumberFormat('ar-IQ').format(initialPaid)} د.ع (صندوق الدينار)</span>}
+                              {initialPaid > 0 && (initialPaidUSD || 0) > 0 && <span className="text-slate-600">|</span>}
+                              {(initialPaidUSD || 0) > 0 && <span className="text-cyan-400">+${(initialPaidUSD || 0).toLocaleString()} (صندوق الدولار)</span>}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>

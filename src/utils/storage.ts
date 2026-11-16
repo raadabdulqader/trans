@@ -330,11 +330,15 @@ export const loadData = (): CustomsAppState => {
   activeSystemExchangeRate = exchangeRate;
   const transactions = getItem<Transaction[]>(KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS).map(t => {
     const totalAmount = Number(t.totalAmount) || 0;
-    const initialPaid = Math.min(totalAmount, Math.max(0, Number(t.initialPaid) || 0));
+    const initialPaid = Math.max(0, Number(t.initialPaid) || 0);
+    const totalAmountUSD = t.isMixedCurrency ? Math.max(0, Number(t.totalAmountUSD) || 0) : t.totalAmountUSD;
+    const initialPaidUSD = Math.max(0, Number(t.initialPaidUSD) || 0);
     return {
       ...t,
       totalAmount,
+      totalAmountUSD,
       initialPaid,
+      initialPaidUSD,
       exchangeRate: t.exchangeRate ? normalizeExchangeRate(t.exchangeRate, exchangeRate) : exchangeRate,
     };
   });

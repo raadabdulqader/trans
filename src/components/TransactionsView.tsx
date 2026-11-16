@@ -272,6 +272,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                               ≈ {new Intl.NumberFormat('ar-IQ').format(Math.round(fin.totalAmount * exchangeRate))} د.ع
                             </div>
                           )}
+                          {tx.isMixedCurrency && (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
+                              ≈ {new Intl.NumberFormat('ar-IQ').format((fin.totalAmount || 0) + ((fin.totalAmountUSD || 0) * exchangeRate))} د.ع
+                            </div>
+                          )}
                           {(fin.totalCarrierCost || 0) > 0 && (
                             <div className="mt-1 flex flex-col gap-0.5">
                               <div className="inline-flex items-center gap-1 text-[10px] text-amber-300 font-mono bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded" dir="rtl" title="أجور نقل متضمنة في العقد وتدفع للنواقل">
