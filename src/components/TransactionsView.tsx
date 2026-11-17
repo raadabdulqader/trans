@@ -239,6 +239,32 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           <div className="text-[11px] text-slate-300 font-medium mt-1 truncate max-w-xs">
                             نوع البضاعة: <span className="text-white font-semibold">{tx.goodsType || 'بضاعة عامة'}</span>
                           </div>
+
+                          {/* Operational Milestones Badges */}
+                          {(tx.deliveryOrderDate || tx.clearanceDate || tx.exitDate || tx.containerReturnDate) ? (
+                            <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px] font-mono">
+                              {tx.deliveryOrderDate && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30" title={`تاريخ أمر تسليم الشحنة: ${tx.deliveryOrderDate}`}>
+                                  📄 تسليم: {tx.deliveryOrderDate}
+                                </span>
+                              )}
+                              {tx.clearanceDate && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" title={`تاريخ إنجاز التخليص الكمركي: ${tx.clearanceDate}`}>
+                                  🏛️ تخليص: {tx.clearanceDate}
+                                </span>
+                              )}
+                              {tx.exitDate && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30" title={`تاريخ خروج الشحنة من الميناء: ${tx.exitDate}`}>
+                                  🚛 خروج: {tx.exitDate}
+                                </span>
+                              )}
+                              {tx.containerReturnDate && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30" title={`تاريخ إعادة الحاوية الفارغة: ${tx.containerReturnDate}`}>
+                                  🔄 عودة حاوية: {tx.containerReturnDate}
+                                </span>
+                              )}
+                            </div>
+                          ) : null}
                         </td>
 
                         {/* Col 2: الزبون (الشركة) */}

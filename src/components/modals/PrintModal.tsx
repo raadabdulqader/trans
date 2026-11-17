@@ -13,6 +13,7 @@ interface PrintModalProps {
   customer?: Customer | null;
   employee?: Employee | null;
   receipts: Receipt[];
+  treasury?: any[];
   onClose: () => void;
 }
 
@@ -24,6 +25,7 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   customer,
   employee,
   receipts,
+  treasury = [],
   onClose,
 }) => {
   if (!isOpen) return null;
@@ -35,8 +37,15 @@ export const PrintModal: React.FC<PrintModalProps> = ({
   const companyKey: CompanyId = transaction?.companyId || receipt?.companyId || 'naqaa_basra';
   const comp = COMPANIES[companyKey] || COMPANIES.naqaa_basra;
 
-  const fin = transaction ? getBillFinancials(transaction, receipts) : null;
+  const fin = transaction ? getBillFinancials(transaction, receipts, undefined, treasury) : null;
   const billReceipts = transaction ? receipts.filter(r => r.billId === transaction.id) : [];
+
+  const billExpenses = transaction ? (treasury || []).filter(t => {
+    if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
+    const isCarrierPayment = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
+    if (isCarrierPayment) return false;
+    return t.relatedBillNo && t.relatedBillNo.trim().toLowerCase() === transaction.billNo.trim().toLowerCase();
+  }) : [];
 
   const todayStr = new Intl.DateTimeFormat('ar-IQ', {
     year: 'numeric',
@@ -286,6 +295,48 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {/* Direct Expenses inside bill */}
+              {billExpenses.length > 0 && (
+                <div className="space-y-2">
+                  <strong className="text-xs">المصاريف الكمركية والتشغيلية المخصومة من الصندوق ({billExpenses.length} سند):</strong>
+                  <table className="w-full text-right text-xs border border-slate-300 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-300">
+                        <th className="p-2 border-l border-slate-300">رقم السند</th>
+                        <th className="p-2 border-l border-slate-300">التصنيف</th>
+                        <th className="p-2 border-l border-slate-300">الجهة المستلمة</th>
+                        <th className="p-2 border-l border-slate-300">المبلغ والصندوق</th>
+                        <th className="p-2 border-l border-slate-300">التاريخ</th>
+                        <th className="p-2 border-l border-slate-300">البيان</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billExpenses.map(exp => (
+                        <tr key={exp.id} className="border-b border-slate-200">
+                          <td className="p-2 border-l border-slate-300 font-mono">{exp.voucherNo}</td>
+                          <td className="p-2 border-l border-slate-300">{exp.category}</td>
+                          <td className="p-2 border-l border-slate-300">{exp.partyName || '—'}</td>
+                          <td className="p-2 border-l border-slate-300 font-mono" dir="ltr">
+                            - {formatCurrency(exp.amount, exp.currency || 'IQD')} ({exp.currency === 'USD' ? 'دولار' : 'دينار'})
+                          </td>
+                          <td className="p-2 border-l border-slate-300 font-mono">{exp.date}</td>
+                          <td className="p-2 border-l border-slate-300">{exp.description || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-50 font-bold border-t border-slate-300">
+                      <tr>
+                        <td colSpan={3} className="p-2 text-right">إجمالي المصاريف المصروفة من الصندوق:</td>
+                        <td colSpan={3} className="p-2 font-mono text-rose-700" dir="ltr">
+                          {formatCurrency(fin.totalDirectExpensesIQD || 0, 'IQD')}
+                          {(fin.totalDirectExpensesUSD || 0) > 0 && ` + ${formatCurrency(fin.totalDirectExpensesUSD || 0, 'USD')}`}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

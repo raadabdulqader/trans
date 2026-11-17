@@ -7,18 +7,19 @@ import {
   Building2, 
   Search, 
   Layers,
-  Truck 
+  Truck,
+  Receipt
 } from 'lucide-react';
-import { TreasuryTransaction, TreasuryAttachment, Employee, AppUser, Receipt, CompanyId } from '../types/customs';
+import { TreasuryTransaction, TreasuryAttachment, Employee, AppUser, CompanyId } from '../types/customs';
 import { formatCurrency, getTreasuryFinancialSummary } from '../utils/storage';
 import { SubAccountType } from './modals/AccountExpenseModal';
 import { AccountsHeaderCards } from './accounts/AccountsHeaderCards';
 import { StaffPayrollRoster } from './accounts/StaffPayrollRoster';
-import { AccountsLedgerTable } from './accounts/AccountsLedgerTable';
+import { AccountsLedgerTable, LedgerSubTab, ExtendedSubAccountType } from './accounts/AccountsLedgerTable';
 
 interface AccountsViewProps {
   treasury: TreasuryTransaction[];
-  receipts: Receipt[];
+  receipts: any[];
   employees: Employee[];
   currentUser: AppUser;
   onOpenAddExpense: (subAccount: SubAccountType) => void;
@@ -45,7 +46,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   onAddEmployee,
   onPaySalary,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'all' | 'salaries' | 'daily' | 'rents' | 'carriers'>('all');
+  const [activeSubTab, setActiveSubTab] = useState<LedgerSubTab>('all');
   const [companyFilter, setCompanyFilter] = useState<'all' | CompanyId | 'shared'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -57,9 +58,12 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   }, [treasury, receipts]);
 
   // Helper to determine sub-account type of any transaction
-  const getSubAccountType = (tx: TreasuryTransaction): SubAccountType | 'other' | 'carriers' => {
+  const getSubAccountType = (tx: TreasuryTransaction): ExtendedSubAccountType => {
+    if (tx.subAccount === 'bill_expenses' || (tx.relatedBillNo && !tx.carrierId && tx.subAccount !== 'carriers')) {
+      return 'bill_expenses';
+    }
     if (tx.subAccount === 'carriers' || tx.carrierId) return 'carriers';
-    if (tx.subAccount) return tx.subAccount;
+    if (tx.subAccount) return tx.subAccount as ExtendedSubAccountType;
     const cat = (tx.category || '').toLowerCase();
     const desc = (tx.description || '').toLowerCase();
 
@@ -179,7 +183,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     return employees.filter(e => !e.category || e.category === 'staff' || e.category === 'both');
   }, [employees]);
 
-  const getSubAccountBadge = (type: SubAccountType | 'other' | 'carriers') => {
+  const getSubAccountBadge = (type: ExtendedSubAccountType) => {
     switch (type) {
       case 'salaries':
         return (
@@ -207,6 +211,13 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold text-[11px]">
             <Truck className="w-3 h-3" />
             <span>أجور ونواقل النقل البري</span>
+          </span>
+        );
+      case 'bill_expenses':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 font-bold text-[11px]">
+            <Receipt className="w-3 h-3" />
+            <span>مصاريف بوالص كمركية</span>
           </span>
         );
       default:
@@ -317,6 +328,21 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             <span>أجور ونواقل النقل البري</span>
             <span className="px-1.5 py-0.2 rounded-full bg-amber-950/60 text-amber-300 font-mono text-[10px]">
               {allAccountExpenses.filter(t => getSubAccountType(t) === 'carriers').length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('bill_expenses')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeSubTab === 'bill_expenses'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-xs'
+                : 'text-slate-400 hover:text-purple-300 hover:bg-slate-800/50'
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5 text-purple-400" />
+            <span>مصاريف البوالص الكمركية</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-purple-950/60 text-purple-300 font-mono text-[10px]">
+              {allAccountExpenses.filter(t => getSubAccountType(t) === 'bill_expenses').length}
             </span>
           </button>
         </div>

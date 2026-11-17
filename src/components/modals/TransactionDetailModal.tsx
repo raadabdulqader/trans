@@ -25,6 +25,7 @@ import { Transaction, Customer, Employee, Receipt, Attachment, COMPANIES, Treasu
 import { formatCurrency, getBillFinancials, getReceiptBreakdownForBill } from '../../utils/storage';
 import { Badge } from '../ui/badge';
 import { CUSTOMS_PRESET_NOTES } from '../../utils/customsNotes';
+import { BillMilestonesTimeline } from '../transactions/BillMilestonesTimeline';
 
 interface TransactionDetailModalProps {
   isOpen: boolean;
@@ -45,9 +46,18 @@ interface TransactionDetailModalProps {
   onPrintBillFile: () => void;
   onPrintInvoice: () => void;
   onEditTransaction?: (tx: Transaction) => void;
+  onUpdateOperationalDates?: (tx: Transaction, updates: {
+    deliveryOrderDate?: string;
+    clearanceDate?: string;
+    exitDate?: string;
+    containerReturnDate?: string;
+  }) => void;
   onDeleteTrip?: (tx: Transaction, trip: BillTransportTrip) => void;
   onDeleteReceipt?: (receipt: Receipt) => void;
   onDeleteTransaction?: (tx: Transaction) => void;
+  onOpenAddExpense?: (tx: Transaction) => void;
+  onEditExpense?: (tx: TreasuryTransaction) => void;
+  onDeleteExpense?: (tx: TreasuryTransaction) => void;
 }
 
 export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
@@ -69,9 +79,13 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   onPrintBillFile,
   onPrintInvoice,
   onEditTransaction,
+  onUpdateOperationalDates,
   onDeleteTrip,
   onDeleteReceipt,
   onDeleteTransaction,
+  onOpenAddExpense,
+  onEditExpense,
+  onDeleteExpense,
 }) => {
   const agencyInputRef = React.useRef<HTMLInputElement | null>(null);
   if (!isOpen || !transaction) return null;
@@ -88,6 +102,13 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
     if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
     const isCarrierPayment = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
     if (!isCarrierPayment) return false;
+    return normalizeBillNo(t.relatedBillNo) === currentBillNo;
+  });
+
+  const billDirectExpenses = (treasury || []).filter(t => {
+    if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
+    const isCarrierPayment = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
+    if (isCarrierPayment) return false;
     return normalizeBillNo(t.relatedBillNo) === currentBillNo;
   });
 
@@ -185,8 +206,19 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             </div>
           </div>
 
+          {/* Operational Milestones Timeline (أمر التسليم، التخليص، خروج الشحنة، عودة الحاوية) */}
+          <BillMilestonesTimeline
+            billNo={transaction.billNo}
+            deliveryOrderDate={transaction.deliveryOrderDate}
+            clearanceDate={transaction.clearanceDate}
+            exitDate={transaction.exitDate}
+            containerReturnDate={transaction.containerReturnDate}
+            containersCount={transaction.containers?.length || 0}
+            onUpdateDates={onUpdateOperationalDates ? (updates) => onUpdateOperationalDates(transaction, updates) : undefined}
+          />
+
           {/* Financial Breakdown Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
               <div className="text-[11px] text-slate-400">
                 المبلغ الكلي للبوليصة:
@@ -277,7 +309,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             </div>
 
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-              <div className="text-[11px] text-slate-400">سلف المخلص المفتوحة:</div>
+              <div className="text-[11px] text-slate-400">سلف المخلص:</div>
               <div className="text-sm font-bold text-rose-400 font-mono mt-1" dir="ltr">
                 {(fin.openAdvancesIQD || 0) > 0 && (fin.openAdvancesUSD || 0) > 0 ? (
                   <div className="flex flex-col text-xs leading-tight">
@@ -292,6 +324,32 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   formatCurrency(0, transaction.currency || 'IQD')
                 )}
               </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950 border border-purple-500/30 col-span-2 sm:col-span-1">
+              <div className="text-[11px] text-purple-300 font-bold flex items-center justify-between">
+                <span>مصاريف البوليصة:</span>
+                <span className="text-[10px] text-slate-400 font-mono">({billDirectExpenses.length} سند)</span>
+              </div>
+              <div className="text-sm font-bold text-purple-300 font-mono mt-1" dir="ltr">
+                {(fin.totalDirectExpensesIQD || 0) > 0 && (fin.totalDirectExpensesUSD || 0) > 0 ? (
+                  <div className="flex flex-col text-xs leading-tight">
+                    <span>{formatCurrency(fin.totalDirectExpensesIQD || 0, 'IQD')}</span>
+                    <span className="text-cyan-300">+{formatCurrency(fin.totalDirectExpensesUSD || 0, 'USD')}</span>
+                  </div>
+                ) : (fin.totalDirectExpensesUSD || 0) > 0 ? (
+                  formatCurrency(fin.totalDirectExpensesUSD || 0, 'USD')
+                ) : (fin.totalDirectExpensesIQD || 0) > 0 ? (
+                  formatCurrency(fin.totalDirectExpensesIQD || 0, 'IQD')
+                ) : (
+                  <span className="text-slate-500 text-xs font-sans">0 د.ع</span>
+                )}
+              </div>
+              {(fin.totalDirectExpenses || 0) > 0 && (
+                <div className="text-[10px] text-slate-400 font-mono mt-0.5" dir="rtl">
+                  صافي الربح: <strong className="text-emerald-400">{formatCurrency(fin.netEstimatedProfit || 0, transaction.currency || 'IQD')}</strong>
+                </div>
+              )}
             </div>
           </div>
 
@@ -573,12 +631,150 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             </div>
           )}
 
+          {/* Bill Direct Operational Expenses Section (مصاريف البوليصة الكمركية والتشغيلية) */}
+          <div className="p-4 rounded-xl bg-slate-950 border border-purple-500/30 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-bold text-white flex items-center gap-2">
+                <span className="text-purple-400">💸</span>
+                <span>المصاريف الكمركية والتشغيلية للبوليصة ({billDirectExpenses.length} سند صرف)</span>
+                {billDirectExpenses.length > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono font-bold">
+                    خصم مباشر من الصندوق
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {onOpenAddExpense && transaction.status !== 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAddExpense(transaction)}
+                    className="px-3 py-1 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    title="تسجيل صرف رسوم كمركية أو موانئ أو فحص أو عمال على هذه البوليصة"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>صرف مصروف كمركي / تشغيلي</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {billDirectExpenses.length === 0 ? (
+              <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-400 text-center text-xs flex flex-wrap items-center justify-between gap-2">
+                <span>لا توجد مصاريف كمركية أو تشغيلية مسجلة من الصندوق على هذه البوليصة حتى الآن.</span>
+                {onOpenAddExpense && transaction.status !== 'cancelled' && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAddExpense(transaction)}
+                    className="text-purple-400 hover:text-purple-300 text-xs font-bold underline"
+                  >
+                    + إضافة أول مصروف الآن
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-right text-xs">
+                  <thead>
+                    <tr className="bg-slate-900/80 text-slate-400 border-b border-slate-800 text-[11px]">
+                      <th className="py-2 px-3">رقم السند</th>
+                      <th className="py-2 px-3">التصنيف</th>
+                      <th className="py-2 px-3">الجهة المستلمة</th>
+                      <th className="py-2 px-3">المبلغ والصندوق</th>
+                      <th className="py-2 px-3">التاريخ والبيان</th>
+                      <th className="py-2 px-3 text-center">المستند</th>
+                      <th className="py-2 px-3 text-center">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {billDirectExpenses.map((exp) => {
+                      const expCurr = exp.currency || 'IQD';
+                      return (
+                        <tr key={exp.id} className="hover:bg-slate-900/40">
+                          <td className="py-2 px-3 font-mono font-bold text-purple-300">
+                            {exp.voucherNo}
+                          </td>
+                          <td className="py-2 px-3 font-bold text-slate-200">
+                            {exp.category}
+                          </td>
+                          <td className="py-2 px-3 text-slate-300">
+                            {exp.partyName || '—'}
+                          </td>
+                          <td className="py-2 px-3 font-mono font-bold" dir="ltr">
+                            <span className={expCurr === 'USD' ? 'text-cyan-400' : 'text-purple-300'}>
+                              - {formatCurrency(exp.amount, expCurr)}
+                            </span>
+                            <div className="text-[9px] font-sans text-slate-400">
+                              {expCurr === 'USD' ? 'صندوق الدولار' : 'صندوق الدينار'}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-slate-400 max-w-[200px]">
+                            <div className="font-mono text-[10px] text-slate-500">{exp.date}</div>
+                            <div className="truncate text-[11px] text-slate-300">{exp.description || '—'}</div>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {exp.attachment && onViewArchive ? (
+                              <button
+                                type="button"
+                                onClick={() => onViewArchive(exp.attachment!, `وصل مصروف ${exp.voucherNo}`)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] font-bold"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>معاينة</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-500 text-[10px]">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {onEditExpense && transaction.status !== 'cancelled' && (
+                                <button
+                                  type="button"
+                                  onClick={() => onEditExpense(exp)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition"
+                                  title="تعديل المصروف"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                              )}
+                              {onDeleteExpense && transaction.status !== 'cancelled' && (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteExpense(exp)}
+                                  className="p-1 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 transition"
+                                  title="إلغاء واسترداد المبلغ إلى الصندوق"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-800 text-xs font-mono font-bold bg-slate-900/90">
+                    <tr>
+                      <td colSpan={3} className="py-2 px-3 text-slate-300 font-sans">
+                        إجمالي المصاريف الكمركية والتشغيلية المخصومة من الصندوق:
+                      </td>
+                      <td colSpan={4} className="py-2 px-3 font-mono text-purple-300 text-sm" dir="ltr">
+                        {formatCurrency(fin.totalDirectExpensesIQD || 0, 'IQD')}
+                        {(fin.totalDirectExpensesUSD || 0) > 0 && ` + ${formatCurrency(fin.totalDirectExpensesUSD || 0, 'USD')}`}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* Transactions Vouchers & Advances History */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <FileText className="w-4 h-4 text-emerald-400" />
-                <span>سجل الوصولات، الدفعات، ودفعات النواقل الخاصة بالبوليصة ({billReceipts.length + carrierPaymentsOnBill.length}):</span>
+                <span>سجل الوصولات، الدفعات، والمصاريف الخاصة بالبوليصة ({billReceipts.length + carrierPaymentsOnBill.length + billDirectExpenses.length}):</span>
               </span>
 
               {fin.openAdvances > 0 && employee && (
@@ -762,6 +958,68 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                           </tr>
                         );
                       })}
+
+                      {/* Direct Customs & Operational Bill Expenses from Treasury */}
+                      {billDirectExpenses.map(t => {
+                        const tCurr = t.currency || 'IQD';
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-900/30 bg-purple-950/10">
+                            <td className="py-2.5 px-3 font-mono font-bold text-purple-300">
+                              {t.voucherNo}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/25">
+                                💸 مصروف كمركي / تشغيلي
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold" dir="ltr">
+                              <span className={tCurr === 'USD' ? 'text-cyan-400' : 'text-purple-300'}>
+                                - {formatCurrency(t.amount, tCurr)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-[11px]">
+                              <div className="flex flex-col space-y-0.5">
+                                <span className="text-slate-200">
+                                  خصم من {tCurr === 'USD' ? 'صندوق الدولار' : 'صندوق الدينار'}: <strong className="text-purple-300 font-bold">{t.partyName || '—'}</strong>
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  بند: {t.category}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 max-w-[200px]">
+                              <div className="font-mono text-[10px] text-slate-500">{t.date}</div>
+                              <div className="truncate text-[11px] text-slate-300">
+                                {t.description || '—'}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {t.attachment && onViewArchive && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onViewArchive(t.attachment!, `وصل مصروف ${t.voucherNo}`)}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] font-bold"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>معاينة</span>
+                                  </button>
+                                )}
+                                {onDeleteExpense && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteExpense(t)}
+                                    title="إلغاء المصروف واسترجاع المبلغ للصندوق"
+                                    className="p-1 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/20"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </>
                   )}
                 </tbody>
@@ -830,6 +1088,23 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 </button>
               );
             })()}
+
+            {onOpenAddExpense && (
+              <button
+                type="button"
+                onClick={() => onOpenAddExpense(transaction)}
+                disabled={transaction.status === 'cancelled'}
+                className={`px-3 py-2 font-bold rounded-xl transition flex items-center gap-1.5 ${
+                  transaction.status === 'cancelled'
+                    ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
+                    : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/40 shadow-xs'
+                }`}
+                title="صرف رسوم كمركية، موانئ، فحص، عمال، أو نثريات على البوليصة من الصندوق"
+              >
+                <span>💸</span>
+                <span>صرف مصروف على البوليصة</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenAttachments}

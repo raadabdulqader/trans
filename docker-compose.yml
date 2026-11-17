@@ -1,11 +1,11 @@
+version: '3.8'
+
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
-    expose:
-      - 3000
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgres://postgres:IkDIb1xtSGD0h3npwkamWDpmuMtS8MWdEPZlSfrDlK98hqjLDxnOORviN1qLoztg@braevxc4eupdu1jszbmswgrr:5432/postgres}
       - NODE_ENV=production
@@ -13,10 +13,7 @@ services:
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://trans.mdd-iq.com}
     networks:
       - coolify
-      - default
 
 networks:
-  default:
   coolify:
-    name: coolify
     external: true

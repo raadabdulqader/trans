@@ -158,7 +158,11 @@ export interface Transaction {
   companyId?: CompanyId; // شركة نقاء البصرة أو شركة صوت الجنوب
   customerId: string;
   employeeId: string;
-  date: string;
+  date: string; // تاريخ فتح المعاملة / الاستلام
+  deliveryOrderDate?: string; // تاريخ أمر تسليم الشحنة (Delivery Order)
+  clearanceDate?: string; // تاريخ إنجاز التخليص الكمركي
+  exitDate?: string; // تاريخ خروج الشحنة من الميناء أو المنفذ الكمركي
+  containerReturnDate?: string; // تاريخ إعادة الحاوية الفارغة للميناء / الخط الملاحي
   goodsType: string;
   status: TransactionStatus;
   currency?: Currency; // 'IQD' (الافتراضي) أو 'USD'
@@ -264,7 +268,7 @@ export interface TreasuryTransaction {
   cancelledBy?: string;
   cancelReason?: string;
   attachment?: TreasuryAttachment;
-  subAccount?: 'salaries' | 'daily' | 'rents' | 'carriers' | 'other';
+  subAccount?: 'salaries' | 'daily' | 'rents' | 'carriers' | 'bill_expenses' | 'other';
   period?: string;
   recordedBy: string;
   createdAt: string;

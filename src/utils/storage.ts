@@ -544,6 +544,10 @@ export interface BillFinancials {
   remainingCarrierDue?: number; // المتبقي المستحق للنواقل بذمة البوليصة
   remainingCarrierDueIQD?: number;
   remainingCarrierDueUSD?: number;
+  totalDirectExpenses?: number; // إجمالي المصاريف الكمركية والتشغيلية المنصرفة على البوليصة (من الصندوق)
+  totalDirectExpensesIQD?: number;
+  totalDirectExpensesUSD?: number;
+  netEstimatedProfit?: number; // صافي الربح التقديري للبوليصة بعد خصم التكاليف التشغيلية
   totalAmount: number; // إجمالي استحقاق البوليصة بذمة الزبون (شامل لكل التكاليف المتفق عليها)
   initialPaid: number;
   additionalPayments: number;
@@ -645,6 +649,26 @@ export const getBillFinancials = (
   const remainingCarrierDueIQD = Math.max(0, totalCarrierCostIQD - totalCarrierPaidIQD);
   const remainingCarrierDueUSD = Math.max(0, totalCarrierCostUSD - totalCarrierPaidUSD);
 
+  // Calculate direct customs and operational bill expenses from treasury (subAccount === 'bill_expenses' or direct withdrawal on bill)
+  const activeDirectExpenses = (treasury || []).filter(t => {
+    if (t.status === 'cancelled' || t.type !== 'withdrawal') return false;
+    const isCarrier = t.subAccount === 'carriers' || !!t.carrierId || (t.category && (t.category.includes('نقل') || t.category.includes('ناقل')));
+    if (isCarrier) return false;
+    return normalizeBillNo(t.relatedBillNo) === txBillNo;
+  });
+
+  const totalDirectExpensesIQD = activeDirectExpenses
+    .filter(t => (t.currency || 'IQD') === 'IQD')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  const totalDirectExpensesUSD = activeDirectExpenses
+    .filter(t => t.currency === 'USD')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  const totalDirectExpenses = currency === 'USD'
+    ? totalDirectExpensesUSD + Math.round((totalDirectExpensesIQD / rate) * 100) / 100
+    : totalDirectExpensesIQD + Math.round(totalDirectExpensesUSD * rate);
+
   // Separate Broker Advances by Currency
   const advIQD = activeReceipts
     .filter(r => r.type === 'advance' && (r.currency || 'IQD') === 'IQD')
@@ -726,6 +750,13 @@ export const getBillFinancials = (
       remainingCarrierDue,
       remainingCarrierDueIQD,
       remainingCarrierDueUSD,
+      totalDirectExpenses,
+      totalDirectExpensesIQD,
+      totalDirectExpensesUSD,
+      netEstimatedProfit: Math.round(
+        (totalAmountIQD + (totalAmountUSD * rate)) -
+        (totalCarrierCostIQD + (totalCarrierCostUSD * rate) + totalDirectExpensesIQD + (totalDirectExpensesUSD * rate))
+      ),
       totalAmount: totalAmountIQD,
       initialPaid: initialIQD,
       additionalPayments: addIQD,
@@ -844,6 +875,10 @@ export const getBillFinancials = (
     remainingCarrierDue,
     remainingCarrierDueIQD,
     remainingCarrierDueUSD,
+    totalDirectExpenses,
+    totalDirectExpensesIQD,
+    totalDirectExpensesUSD,
+    netEstimatedProfit: Math.round((totalAmount - (carrierCostInBillCurr + totalDirectExpenses)) * 100) / 100,
     totalAmount: isTxCancelled ? (tx.totalAmount || 0) : totalAmount,
     initialPaid: initial,
     additionalPayments,

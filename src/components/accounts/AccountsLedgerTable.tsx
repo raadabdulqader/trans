@@ -7,15 +7,19 @@ import {
   Trash2, 
   Ban, 
   Info, 
-  Eye 
+  Eye,
+  Receipt
 } from 'lucide-react';
 import { TreasuryTransaction, TreasuryAttachment, AppUser, COMPANIES } from '../../types/customs';
 import { SubAccountType } from '../modals/AccountExpenseModal';
 import { formatCurrency } from '../../utils/storage';
 
+export type LedgerSubTab = 'all' | 'salaries' | 'daily' | 'rents' | 'carriers' | 'bill_expenses';
+export type ExtendedSubAccountType = SubAccountType | 'other' | 'carriers' | 'bill_expenses';
+
 export interface AccountsLedgerTableProps {
   filteredExpenses: TreasuryTransaction[];
-  activeSubTab: 'all' | 'salaries' | 'daily' | 'rents' | 'carriers';
+  activeSubTab: LedgerSubTab;
   totalFilteredIQD: number;
   totalFilteredUSD: number;
   currentUser: AppUser;
@@ -24,8 +28,8 @@ export interface AccountsLedgerTableProps {
   onEditExpense: (tx: TreasuryTransaction) => void;
   onDeleteExpense: (tx: TreasuryTransaction) => void;
   onViewArchive: (attachment: TreasuryAttachment, title?: string) => void;
-  getSubAccountType: (tx: TreasuryTransaction) => SubAccountType | 'other' | 'carriers';
-  getSubAccountBadge: (type: SubAccountType | 'other' | 'carriers') => React.ReactNode;
+  getSubAccountType: (tx: TreasuryTransaction) => ExtendedSubAccountType;
+  getSubAccountBadge: (type: ExtendedSubAccountType) => React.ReactNode;
 }
 
 export const AccountsLedgerTable: React.FC<AccountsLedgerTableProps> = ({
@@ -93,7 +97,7 @@ export const AccountsLedgerTable: React.FC<AccountsLedgerTableProps> = ({
                     </p>
                     <div className="flex justify-center gap-2 pt-1">
                       <button
-                        onClick={() => onOpenAddExpense(activeSubTab === 'all' || activeSubTab === 'carriers' ? 'salaries' : activeSubTab)}
+                        onClick={() => onOpenAddExpense(activeSubTab === 'daily' || activeSubTab === 'rents' ? activeSubTab : 'salaries')}
                         className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs transition"
                       >
                         + إضافة قيد جديد الآن
@@ -242,6 +246,15 @@ export const AccountsLedgerTable: React.FC<AccountsLedgerTableProps> = ({
                                 {tx.period || '—'}
                               </span>
                             </div>
+
+                            {tx.relatedBillNo && (
+                              <>
+                                <span className="text-slate-700">•</span>
+                                <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono font-bold">
+                                  بوليصة: {tx.relatedBillNo}
+                                </span>
+                              </>
+                            )}
 
                             {isCancelled && (
                               <>

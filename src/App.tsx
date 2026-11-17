@@ -73,6 +73,7 @@ import {
   BrokerStatementModal 
 } from './components/modals/BrokerFinancialModal';
 import { AccountExpenseModal, SubAccountType } from './components/modals/AccountExpenseModal';
+import { BillExpenseModal } from './components/modals/BillExpenseModal';
 import { ConfirmDeleteModal, FinancialImpact, BlockedReasonDetail } from './components/modals/ConfirmDeleteModal';
 import { VoidBillFinancialModal, VoidResolutionMode } from './components/modals/VoidBillFinancialModal';
 import { CalendarViewModal } from './components/modals/CalendarViewModal';
@@ -175,6 +176,11 @@ export default function App() {
   // Void Bill Financial Resolution Modal State
   const [isVoidBillModalOpen, setIsVoidBillModalOpen] = useState(false);
   const [voidBillTarget, setVoidBillTarget] = useState<Transaction | null>(null);
+
+  // Bill Expense Modal State (مصاريف البوليصة المخصومة من الصندوق)
+  const [isBillExpenseModalOpen, setIsBillExpenseModalOpen] = useState(false);
+  const [selectedBillExpenseTx, setSelectedBillExpenseTx] = useState<Transaction | null>(null);
+  const [editingBillExpense, setEditingBillExpense] = useState<TreasuryTransaction | null>(null);
 
   // In-App Confirm Delete & Accounting Cancellation State
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -889,6 +895,36 @@ export default function App() {
     }
     setIsCustModalOpen(false);
     setEditingCust(null);
+  };
+
+  const handleUpdateOperationalDates = (
+    tx: Transaction,
+    updates: {
+      deliveryOrderDate?: string;
+      clearanceDate?: string;
+      exitDate?: string;
+      containerReturnDate?: string;
+    }
+  ) => {
+    const updated = data.transactions.map(t =>
+      t.id === tx.id ? { ...t, ...updates } : t
+    );
+    setData(prev => ({ ...prev, transactions: updated }));
+    setSelectedTx(prev => (prev && prev.id === tx.id ? { ...prev, ...updates } : prev));
+    const labels: string[] = [];
+    if (updates.deliveryOrderDate !== undefined) labels.push(`أمر التسليم: ${updates.deliveryOrderDate || 'ممسوح'}`);
+    if (updates.clearanceDate !== undefined) labels.push(`التخليص: ${updates.clearanceDate || 'ممسوح'}`);
+    if (updates.exitDate !== undefined) labels.push(`خروج الشحنة: ${updates.exitDate || 'ممسوح'}`);
+    if (updates.containerReturnDate !== undefined) labels.push(`عودة الحاوية: ${updates.containerReturnDate || 'ممسوح'}`);
+    addAuditLog({
+      action: 'update',
+      entityType: 'bill',
+      entityId: tx.id,
+      entityReference: `بوليصة ${tx.billNo}`,
+      title: 'تحديث التواريخ التشغيلية للبوليصة',
+      details: `تم تحديث المواعيد التشغيلية للبوليصة (${tx.billNo}): ${labels.join(' | ')}.`,
+    });
+    showToast('تم تحديث التواريخ والمراحل التشغيلية للبوليصة بنجاح');
   };
 
   const handleDeleteCustomer = (customer: Customer) => {
@@ -1726,6 +1762,166 @@ export default function App() {
     }
   };
 
+  // Bill Expense Handlers (مصاريف البوليصة المخصومة من الصندوق بالدينار أو بالدولار)
+  const handleOpenAddBillExpense = (tx: Transaction) => {
+    setSelectedBillExpenseTx(tx);
+    setEditingBillExpense(null);
+    setIsBillExpenseModalOpen(true);
+  };
+
+  const handleEditBillExpense = (expense: TreasuryTransaction) => {
+    const tx = (data.transactions || []).find(
+      t => t.billNo.trim().toLowerCase() === (expense.relatedBillNo || '').trim().toLowerCase()
+    );
+    if (tx) {
+      setSelectedBillExpenseTx(tx);
+      setEditingBillExpense(expense);
+      setIsBillExpenseModalOpen(true);
+    } else {
+      setSelectedBillExpenseTx({
+        id: `tx-temp-${Date.now()}`,
+        billNo: expense.relatedBillNo || 'BL-UNKNOWN',
+        companyId: (expense.companyId === 'shared' ? 'naqaa_basra' : expense.companyId) || 'naqaa_basra',
+        customerId: '',
+        employeeId: '',
+        date: expense.date,
+        goodsType: '',
+        status: 'pending',
+        currency: expense.currency || 'IQD',
+        totalAmount: 0,
+        initialPaid: 0,
+        notes: '',
+        containers: [],
+        createdAt: expense.createdAt,
+      });
+      setEditingBillExpense(expense);
+      setIsBillExpenseModalOpen(true);
+    }
+  };
+
+  const handleSaveBillExpense = (
+    expenseData: Omit<TreasuryTransaction, 'id' | 'createdAt'> & { id?: string },
+    andPrint: boolean = false
+  ) => {
+    const isUpdate = !!expenseData.id;
+    let savedRecord: TreasuryTransaction;
+    const expCurr: Currency = expenseData.currency || 'IQD';
+    const cashboxName = expCurr === 'USD' ? 'صندوق الدولار الأمريكي' : 'صندوق الدينار العراقي';
+
+    if (isUpdate) {
+      const existing = (data.treasury || []).find(t => t.id === expenseData.id);
+      savedRecord = {
+        ...(existing || {}),
+        ...expenseData,
+        id: expenseData.id!,
+        type: 'withdrawal',
+        subAccount: 'bill_expenses',
+        createdAt: existing?.createdAt || new Date().toISOString().split('T')[0],
+      } as TreasuryTransaction;
+      const updated = (data.treasury || []).map(t => t.id === expenseData.id ? savedRecord : t);
+      setData(prev => ({ ...prev, treasury: updated }));
+      addAuditLog({
+        action: 'update',
+        entityType: 'treasury',
+        entityId: savedRecord.id,
+        entityReference: `سند ${savedRecord.voucherNo} - بوليصة ${savedRecord.relatedBillNo}`,
+        title: `تعديل مصروف كمركي للبوليصة (${savedRecord.relatedBillNo})`,
+        details: `تحديث مصروف كمركي (${savedRecord.category}) بقيمة ${formatCurrency(savedRecord.amount, expCurr)} لصالح (${savedRecord.partyName}). الأثر على ${cashboxName}.`,
+        financialImpact: {
+          amount: savedRecord.amount,
+          balanceChange: `تعديل القيد وخصمه من ${cashboxName}`,
+        },
+      });
+      showToast(`تم تحديث مصروف البوليصة (${savedRecord.voucherNo}) بنجاح`);
+    } else {
+      const newTx: TreasuryTransaction = {
+        ...expenseData,
+        id: `tr-exp-${Date.now()}`,
+        type: 'withdrawal',
+        subAccount: 'bill_expenses',
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      savedRecord = newTx;
+      setData(prev => ({ ...prev, treasury: [newTx, ...(prev.treasury || [])] }));
+      addAuditLog({
+        action: 'create',
+        entityType: 'treasury',
+        entityId: savedRecord.id,
+        entityReference: `سند ${savedRecord.voucherNo} - بوليصة ${savedRecord.relatedBillNo}`,
+        title: `صرف مصروف كمركي للبوليصة (${savedRecord.relatedBillNo})`,
+        details: `تم صرف ${formatCurrency(savedRecord.amount, expCurr)} (${savedRecord.category}) لحساب (${savedRecord.partyName}) وخصمها فوراً من ${cashboxName}.`,
+        financialImpact: {
+          amount: savedRecord.amount,
+          outflowChange: `خصم ${formatCurrency(savedRecord.amount, expCurr)} من ${cashboxName}`,
+          balanceChange: `صرف مصروف تشغيلي على البوليصة ${savedRecord.relatedBillNo}`,
+        },
+      });
+      showToast(`تم صرف المصروف بنجاح وخصم ${formatCurrency(savedRecord.amount, expCurr)} من ${cashboxName}`);
+    }
+
+    setIsBillExpenseModalOpen(false);
+    setEditingBillExpense(null);
+
+    if (andPrint) {
+      setPrintTreasuryTx(savedRecord);
+      setPrintTreasuryMode('voucher');
+      setIsPrintTreasuryOpen(true);
+    }
+  };
+
+  const handleDeleteBillExpense = (expense: TreasuryTransaction) => {
+    const expCurr: Currency = expense.currency || 'IQD';
+    const cashboxName = expCurr === 'USD' ? 'صندوق الدولار الأمريكي' : 'صندوق الدينار العراقي';
+    const hasPerm = data.currentUser.role === 'admin' || !!data.currentUser.permissions.deleteRecords;
+
+    setDeleteConfirmation({
+      isOpen: true,
+      mode: 'cancel',
+      title: 'إلغاء واسترداد مصروف البوليصة إلى الصندوق',
+      itemName: `${expense.category} - ${formatCurrency(expense.amount, expCurr)} (سند ${expense.voucherNo})`,
+      message: `هل أنت متأكد من إلغاء هذا المصروف الكمركي للبوليصة (${expense.relatedBillNo})؟\n\nتنبيه محاسبي ورقابي: سيتم إلغاء سند الصرف دفترياً واسترداد كامل المبلغ (${formatCurrency(expense.amount, expCurr)}) فوراً إلى رصيد (${cashboxName}) وتعديل أرباح البوليصة.`,
+      financialImpact: {
+        outflowChange: `استرجاع ${formatCurrency(expense.amount, expCurr)} إلى إجمالي رصيد الصندوق`,
+        balanceChange: `زيادة رصيد ${cashboxName} بمقدار ${formatCurrency(expense.amount, expCurr)}`,
+        partyChange: `البوليصة: ${expense.relatedBillNo} • الجهة: ${expense.partyName || '—'}`,
+      },
+      hasPermission: hasPerm,
+      permissionNote: hasPerm
+        ? undefined
+        : `المستخدم الحالي (${data.currentUser.name} - ${data.currentUser.roleTitle}) لا يمتلك صلاحية إلغاء أو حذف القيود المالية.`,
+      onConfirmCancel: (reason: string) => {
+        const updated = (data.treasury || []).map(t =>
+          t.id === expense.id
+            ? {
+                ...t,
+                status: 'cancelled' as const,
+                cancelledAt: new Date().toISOString(),
+                cancelledBy: data.currentUser.name,
+                cancelReason: reason || 'إلغاء مصروف كمركي واسترداد المبلغ إلى الصندوق',
+              }
+            : t
+        );
+        setData(prev => ({ ...prev, treasury: updated }));
+        addAuditLog({
+          action: 'void',
+          entityType: 'treasury',
+          entityId: expense.id,
+          entityReference: `سند ${expense.voucherNo} - بوليصة ${expense.relatedBillNo}`,
+          title: `إلغاء واسترداد مصروف كمركي للبوليصة (${expense.relatedBillNo})`,
+          details: `تم إلغاء سند المصروف (${expense.voucherNo}) بقيمة ${formatCurrency(expense.amount, expCurr)} واسترداد كامل المبلغ إلى ${cashboxName}. السبب: ${reason || 'إلغاء دفتري'}.`,
+          financialImpact: {
+            amount: expense.amount,
+            balanceChange: `استرداد ${formatCurrency(expense.amount, expCurr)} إلى ${cashboxName}`,
+          },
+        });
+        showToast(`تم إلغاء المصروف واسترداد ${formatCurrency(expense.amount, expCurr)} إلى ${cashboxName} بنجاح`);
+        setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+        setIsBillExpenseModalOpen(false);
+        setEditingBillExpense(null);
+      },
+    });
+  };
+
   const handleOpenAddEmployee = (cat?: EmployeeCategory) => {
     setEditingEmp(null);
     setEmpModalCategory(cat || 'staff');
@@ -2355,12 +2551,22 @@ export default function App() {
                 setIsAccountExpenseOpen(true);
               }}
               onEditExpense={(tx) => {
-                setEditingAccountExpense(tx);
-                setAccountExpenseTargetEmp(null);
-                setAccountExpenseSubAccount((tx.subAccount as any) || 'salaries');
-                setIsAccountExpenseOpen(true);
+                if (tx.subAccount === 'bill_expenses' || (tx.relatedBillNo && !tx.carrierId && tx.subAccount !== 'carriers')) {
+                  handleEditBillExpense(tx);
+                } else {
+                  setEditingAccountExpense(tx);
+                  setAccountExpenseTargetEmp(null);
+                  setAccountExpenseSubAccount((tx.subAccount as any) || 'salaries');
+                  setIsAccountExpenseOpen(true);
+                }
               }}
-              onDeleteExpense={handleDeleteTreasuryTransaction}
+              onDeleteExpense={(tx) => {
+                if (tx.subAccount === 'bill_expenses' || (tx.relatedBillNo && !tx.carrierId && tx.subAccount !== 'carriers')) {
+                  handleDeleteBillExpense(tx);
+                } else {
+                  handleDeleteTreasuryTransaction(tx);
+                }
+              }}
               onViewArchive={(att, title) => handleOpenArchiveViewer(att, title)}
               onPrintVoucher={(tx) => {
                 setPrintTreasuryTx(tx);
@@ -2582,6 +2788,7 @@ export default function App() {
         }}
         onSave={handleSaveTransaction}
         onDelete={handleDeleteTransaction}
+        onOpenAddExpense={handleOpenAddBillExpense}
       />
 
       {/* Carrier Modals (شركات النقل والنواقل البرية) */}
@@ -2695,6 +2902,7 @@ export default function App() {
           setEditingTx(tx);
           setIsTxModalOpen(true);
         }}
+        onUpdateOperationalDates={handleUpdateOperationalDates}
         onDeleteTrip={handleDeleteTripFromBill}
         onOpenQuickAdvance={() => {
           if (selectedTx) {
@@ -2739,6 +2947,9 @@ export default function App() {
         }}
         onDeleteReceipt={handleDeleteReceipt}
         onDeleteTransaction={handleDeleteTransaction}
+        onOpenAddExpense={handleOpenAddBillExpense}
+        onEditExpense={handleEditBillExpense}
+        onDeleteExpense={handleDeleteBillExpense}
       />
 
       {/* Quick Advance Modal */}
@@ -2859,6 +3070,7 @@ export default function App() {
         customer={printTx ? data.customers.find(c => c.id === printTx.customerId) : null}
         employee={printTx ? data.employees.find(e => e.id === printTx.employeeId) : null}
         receipts={data.receipts}
+        treasury={data.treasury || []}
         onClose={() => {
           setIsPrintModalOpen(false);
           setPrintTx(null);
@@ -2976,6 +3188,26 @@ export default function App() {
         onSave={handleSaveAccountExpense}
         onDelete={handleDeleteTreasuryTransaction}
       />
+
+      {/* Bill Expense Modal (صرف مصاريف البوليصة الكمركية من الصندوق) */}
+      {selectedBillExpenseTx && (
+        <BillExpenseModal
+          isOpen={isBillExpenseModalOpen}
+          transaction={selectedBillExpenseTx}
+          initialData={editingBillExpense}
+          customer={data.customers.find(c => c.id === selectedBillExpenseTx.customerId)}
+          employee={data.employees.find(e => e.id === selectedBillExpenseTx.employeeId)}
+          currentUser={data.currentUser}
+          exchangeRate={data.exchangeRate || 1500}
+          onClose={() => {
+            setIsBillExpenseModalOpen(false);
+            setEditingBillExpense(null);
+          }}
+          onSave={handleSaveBillExpense}
+          onDelete={handleDeleteBillExpense}
+          onViewArchive={(att, title) => handleOpenArchiveViewer(att, title)}
+        />
+      )}
 
       {/* Confirm Delete & Accounting Cancellation In-App Modal */}
       <ConfirmDeleteModal
