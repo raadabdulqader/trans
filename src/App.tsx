@@ -2639,6 +2639,7 @@ export default function App() {
                 setQuickSettleEmpId(empId);
                 setIsQuickSettleOpen(true);
               }}
+              onOpenAddExpense={handleOpenAddBillExpense}
               onTryChangeStatus={handleTryChangeStatus}
             />
           )}

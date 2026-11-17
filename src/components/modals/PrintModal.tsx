@@ -140,6 +140,15 @@ export const PrintModal: React.FC<PrintModalProps> = ({
 
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
                   <div><strong>رقم البوليصة (B/L):</strong> <span className="font-mono font-bold">{transaction.billNo}</span></div>
+                  {transaction.jobNumber && (
+                    <div><strong>رقم المعاملة (Job No):</strong> <span className="font-mono font-bold text-slate-800">{transaction.jobNumber}</span></div>
+                  )}
+                  {transaction.containerDestination && (
+                    <div><strong>وجهة الحاوية:</strong> <span>{transaction.containerDestination}</span></div>
+                  )}
+                  {transaction.freeTimeDays && (
+                    <div><strong>فترة السماح (Free Time):</strong> <span className="font-mono">{transaction.freeTimeDays} يوم</span></div>
+                  )}
                   <div><strong>تاريخ إنشاء البوليصة:</strong> <span className="font-mono">{transaction.createdAt || transaction.date}</span></div>
                   <div><strong>تاريخ الاستلام:</strong> <span className="font-mono">{transaction.date}</span></div>
                   <div><strong>نوع البضاعة:</strong> {transaction.goodsType || 'بضاعة عامة'}</div>
@@ -238,6 +247,15 @@ export const PrintModal: React.FC<PrintModalProps> = ({
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
                   <div><strong>العميل:</strong> {customer?.name}</div>
                   <div><strong>المخلص:</strong> {employee?.name}</div>
+                  {transaction.jobNumber && (
+                    <div><strong>رقم المعاملة (Job No):</strong> <span className="font-mono font-bold text-slate-800">{transaction.jobNumber}</span></div>
+                  )}
+                  {transaction.containerDestination && (
+                    <div><strong>وجهة الحاوية:</strong> <span>{transaction.containerDestination}</span></div>
+                  )}
+                  {transaction.freeTimeDays && (
+                    <div><strong>فترة السماح (Free Time):</strong> <span className="font-mono">{transaction.freeTimeDays} يوم</span></div>
+                  )}
                   <div><strong>تاريخ إنشاء البوليصة:</strong> <span className="font-mono">{transaction.createdAt || transaction.date}</span></div>
                   <div><strong>تاريخ الاستلام والفتح:</strong> <span className="font-mono">{transaction.date}</span></div>
                   <div><strong>الحالة:</strong> {transaction.status === 'completed' ? 'منجزة' : 'قيد التنفيذ'}</div>

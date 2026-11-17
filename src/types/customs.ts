@@ -155,6 +155,7 @@ export type TransactionStatus = 'pending' | 'completed' | 'issue' | 'cancelled';
 export interface Transaction {
   id: string;
   billNo: string;
+  jobNumber?: string; // رقم المعاملة الداخلي (Job Number / Job No)
   companyId?: CompanyId; // شركة نقاء البصرة أو شركة صوت الجنوب
   customerId: string;
   employeeId: string;
@@ -163,6 +164,8 @@ export interface Transaction {
   clearanceDate?: string; // تاريخ إنجاز التخليص الكمركي
   exitDate?: string; // تاريخ خروج الشحنة من الميناء أو المنفذ الكمركي
   containerReturnDate?: string; // تاريخ إعادة الحاوية الفارغة للميناء / الخط الملاحي
+  freeTimeDays?: number; // فترة السماح للحاوية بالأيام (Free Time)
+  containerDestination?: string; // وجهة الحاوية / التسليم (Container Destination)
   goodsType: string;
   status: TransactionStatus;
   currency?: Currency; // 'IQD' (الافتراضي) أو 'USD'

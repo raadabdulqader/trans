@@ -19,12 +19,14 @@ import {
   HardHat,
   Ship,
   FileCheck2,
-  Truck
+  Truck,
+  ChevronDown
 } from 'lucide-react';
 import { Transaction, Customer, Employee, Receipt, AppUser, CompanyId, COMPANIES, TreasuryAttachment } from '../types/customs';
 import { formatCurrency, getBillFinancials } from '../utils/storage';
 import { Badge } from './ui/badge';
 import { CUSTOMS_PRESET_NOTES } from '../utils/customsNotes';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
@@ -43,6 +45,7 @@ interface TransactionsViewProps {
   onOpenQuickAdvance: (tx: Transaction) => void;
   onOpenQuickPayment: (tx: Transaction) => void;
   onOpenQuickSettlement: (tx: Transaction, empId: string) => void;
+  onOpenAddExpense?: (tx: Transaction) => void;
   onTryChangeStatus: (tx: Transaction, newStatus: Transaction['status']) => void;
 }
 
@@ -63,11 +66,22 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onOpenQuickAdvance,
   onOpenQuickPayment,
   onOpenQuickSettlement,
+  onOpenAddExpense,
   onTryChangeStatus,
 }) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'issue' | 'cancelled'>('all');
   const [customerFilter, setCustomerFilter] = useState<string>(selectedCustomerId || 'all');
   const [companyFilter, setCompanyFilter] = useState<'all' | CompanyId>('all');
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+
+  const toggleRowExpand = (id: string) => {
+    setExpandedRowIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const filteredTransactions = transactions.filter(t => {
     // Company Filter
@@ -85,6 +99,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       const cust = customers.find(c => c.id === t.customerId);
       const emp = employees.find(e => e.id === t.employeeId);
       const matchesBill = t.billNo.toLowerCase().includes(q);
+      const matchesJob = (t.jobNumber || '').toLowerCase().includes(q);
+      const matchesDestination = (t.containerDestination || '').toLowerCase().includes(q);
       const matchesGoods = t.goodsType?.toLowerCase().includes(q);
       const matchesCustomer = cust?.name.toLowerCase().includes(q);
       const matchesEmp = emp?.name.toLowerCase().includes(q);
@@ -92,7 +108,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       const matchesCreated = (t.createdAt || '').toLowerCase().includes(q);
       const matchesNotes = (t.notes || '').toLowerCase().includes(q);
 
-      if (!matchesBill && !matchesGoods && !matchesCustomer && !matchesEmp && !matchesContainers && !matchesCreated && !matchesNotes) {
+      if (!matchesBill && !matchesJob && !matchesDestination && !matchesGoods && !matchesCustomer && !matchesEmp && !matchesContainers && !matchesCreated && !matchesNotes) {
         return false;
       }
     }
@@ -193,78 +209,310 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   return (
                     <React.Fragment key={tx.id}>
                       {/* الصف الأول (Row 1): هوية البوليصة، الزبون، الحسابات المالية، وأزرار الإجراءات */}
-                      <tr className="bg-slate-900 hover:bg-slate-850/80 transition-colors">
-                        {/* Col 1: رقم البوليصة + شارة الشركة + شارات الملاحظات + وصف البضاعة */}
-                        <td className="pt-3.5 pb-1.5 px-4 align-top">
+                      <tr className="bg-slate-900 hover:bg-slate-850/80 transition-colors border-b border-slate-800/80">
+                        {/* Col 1: رقم البوليصة + شارة الشركة + محفز البوب أوفر التفاعلي لعرض كافة معلومات ومراحل البوليصة */}
+                        <td className="pt-3.5 pb-2 px-4 align-top">
                           <div className="flex items-center gap-2 flex-wrap">
+                            {/* شارة الشركة التابعة */}
                             <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
                               {comp.shortName}
                             </span>
-                            <button
-                              onClick={() => onOpenTransactionDetail(tx)}
-                              className="font-mono font-bold text-sm text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1.5"
-                            >
-                              <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                              <span>{tx.billNo}</span>
-                            </button>
-                            {tx.agencyDocument && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  onViewArchive
-                                    ? onViewArchive(tx.agencyDocument!, `ورقة الوكالة - بوليصة ${tx.billNo}`)
-                                    : onOpenTransactionDetail(tx)
-                                }
-                                title={`معاينة ورقة الوكالة المؤرشفة (${tx.agencyDocument.name})`}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold transition"
-                              >
-                                <FileCheck2 className="w-3 h-3" />
-                                <span>الوكالة</span>
-                              </button>
-                            )}
-                            {CUSTOMS_PRESET_NOTES.filter(
-                              (p) => tx.notes?.includes(p.fullText) || tx.notes?.includes(p.badgeLabel)
-                            ).map((p) => (
-                              <Badge
-                                key={p.id}
-                                variant={p.variant}
-                                className="text-[9px] py-0 px-1.5 font-normal cursor-pointer"
-                                title={p.fullText}
-                                onClick={() => onOpenTransactionDetail(tx)}
-                              >
-                                <span>{p.icon}</span>
-                              </Badge>
-                            ))}
-                          </div>
-                          <div className="text-[11px] text-slate-300 font-medium mt-1 truncate max-w-xs">
-                            نوع البضاعة: <span className="text-white font-semibold">{tx.goodsType || 'بضاعة عامة'}</span>
-                          </div>
 
-                          {/* Operational Milestones Badges */}
-                          {(tx.deliveryOrderDate || tx.clearanceDate || tx.exitDate || tx.containerReturnDate) ? (
-                            <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px] font-mono">
-                              {tx.deliveryOrderDate && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30" title={`تاريخ أمر تسليم الشحنة: ${tx.deliveryOrderDate}`}>
-                                  📄 تسليم: {tx.deliveryOrderDate}
-                                </span>
-                              )}
-                              {tx.clearanceDate && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" title={`تاريخ إنجاز التخليص الكمركي: ${tx.clearanceDate}`}>
-                                  🏛️ تخليص: {tx.clearanceDate}
-                                </span>
-                              )}
-                              {tx.exitDate && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30" title={`تاريخ خروج الشحنة من الميناء: ${tx.exitDate}`}>
-                                  🚛 خروج: {tx.exitDate}
-                                </span>
-                              )}
-                              {tx.containerReturnDate && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30" title={`تاريخ إعادة الحاوية الفارغة: ${tx.containerReturnDate}`}>
-                                  🔄 عودة حاوية: {tx.containerReturnDate}
-                                </span>
-                              )}
-                            </div>
-                          ) : null}
+                            {/* محفز البوب أوفر التفاعلي - رقم البوليصة فقط بدون أي نصوص إضافية */}
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950/90 hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 border border-slate-750 hover:border-emerald-500/50 font-mono font-black text-sm transition cursor-pointer shadow-xs group select-none"
+                                  title="انقر لعرض كافة معلومات ومراحل البوليصة"
+                                >
+                                  <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                                  <span>{tx.billNo}</span>
+                                  <ChevronDown className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-y-0.5 transition-transform shrink-0" />
+                                </button>
+                              </PopoverTrigger>
+
+                              <PopoverContent
+                                align="start"
+                                side="bottom"
+                                sideOffset={8}
+                                className="w-[780px] sm:w-[840px] max-w-[95vw] p-4 sm:p-5 bg-slate-900 border border-slate-750 shadow-2xl rounded-2xl text-xs space-y-3.5 z-50 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto"
+                                dir="rtl"
+                              >
+                                {/* 1. رأس بطاقة البوب أوفر الأفقي: الشركة + رقم البوليصة + Job No + الحالة التشغيلية */}
+                                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800 flex-wrap gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
+                                      {comp.shortName}
+                                    </span>
+                                    <span className="font-mono font-black text-sm text-emerald-400">
+                                      {tx.billNo}
+                                    </span>
+                                    {tx.jobNumber && (
+                                      <span className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold">
+                                        Job: {tx.jobNumber}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] text-slate-400 font-medium">الحالة التشغيلية:</span>
+                                      <select
+                                        value={tx.status}
+                                        disabled={!currentUser.permissions.editTx}
+                                        onChange={(e) => onTryChangeStatus(tx, e.target.value as any)}
+                                        className={`rounded-lg px-2 py-0.5 text-[10px] font-bold border transition cursor-pointer ${
+                                          tx.status === 'completed'
+                                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                            : tx.status === 'pending'
+                                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                                            : tx.status === 'cancelled'
+                                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                            : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                        }`}
+                                      >
+                                        <option value="pending" className="bg-slate-900 text-amber-400">⏳ قيد التنفيذ</option>
+                                        <option value="completed" className="bg-slate-900 text-emerald-400">✅ منجزة</option>
+                                        <option value="issue" className="bg-slate-900 text-rose-400">⚠️ معلقة</option>
+                                        <option value="cancelled" className="bg-slate-900 text-rose-300">❌ ملغاة دفترياً</option>
+                                      </select>
+                                    </div>
+                                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                                      معلومات الشحنة والفاتورة
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 2. الجسم الرئيسي للبوب أوفر - شبكة أفقية بعمودين متوازيين */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
+                                  {/* العمود الأيمن: هوية البضاعة والمواعيد والمراحل التشغيلية الأربعة */}
+                                  <div className="space-y-3">
+                                    {/* بطاقة نوع البضاعة والتواريخ */}
+                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1.5 text-[11px]">
+                                          <span>📦</span>
+                                          <span>نوع البضاعة والوصف:</span>
+                                        </span>
+                                        <span className="font-bold text-white bg-slate-900 px-2.5 py-0.5 rounded border border-slate-800 text-xs">
+                                          {tx.goodsType || 'بضاعة عامة'}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1.5 border-t border-slate-800/80">
+                                        <span className="flex items-center gap-1 font-mono">
+                                          <Calendar className="w-3 h-3 text-emerald-400 shrink-0" />
+                                          <span>إنشاء: <strong className="text-slate-200">{tx.createdAt || tx.date || '—'}</strong></span>
+                                        </span>
+                                        <span className="flex items-center gap-1 font-mono">
+                                          <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
+                                          <span>استلام: <strong className="text-slate-200">{tx.date || '—'}</strong></span>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* بطاقة المراحل والتواريخ التشغيلية الأربعة وفترة السماح */}
+                                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+                                      <div className="text-[11px] text-slate-300 font-bold flex items-center justify-between">
+                                        <span className="flex items-center gap-1 text-slate-200">
+                                          <span>⏱️</span>
+                                          <span>المراحل والتواريخ التشغيلية:</span>
+                                        </span>
+                                        {tx.freeTimeDays && (
+                                          <span className="font-mono text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
+                                            ⏳ فترة السماح: {tx.freeTimeDays} يوم
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.deliveryOrderDate ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                            <span>📄</span>
+                                            <span>أمر التسليم:</span>
+                                          </span>
+                                          <span className="font-bold text-slate-200">{tx.deliveryOrderDate || 'غير محدد'}</span>
+                                        </div>
+
+                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.clearanceDate ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                            <span>🏛️</span>
+                                            <span>التخليص الكمركي:</span>
+                                          </span>
+                                          <span className="font-bold text-slate-200">{tx.clearanceDate || 'غير محدد'}</span>
+                                        </div>
+
+                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.exitDate ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                            <span>🚛</span>
+                                            <span>خروج الشحنة:</span>
+                                          </span>
+                                          <span className="font-bold text-slate-200">{tx.exitDate || 'غير محدد'}</span>
+                                        </div>
+
+                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.containerReturnDate ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                            <span>🔄</span>
+                                            <span>إعادة الحاوية:</span>
+                                          </span>
+                                          <span className="font-bold text-slate-200">{tx.containerReturnDate || 'غير محدد'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* العمود الأيسر: أجور النقل البري + الحاويات + المخلص + الوكالة والملاحظات */}
+                                  <div className="space-y-3">
+                                    {/* بطاقة أجور النقل البري والنواقل (المنقولة من الجدول لتصبح بارزة هنا) */}
+                                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-amber-300 font-black text-xs flex items-center gap-1.5">
+                                          <Truck className="w-4 h-4 text-amber-400" />
+                                          <span>أجور نقل البضائع والشاحنات (أجور النواقل):</span>
+                                        </span>
+                                        <span className="font-mono font-black text-sm text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-lg border border-amber-500/40" dir="ltr">
+                                          {(fin.totalCarrierCost || 0) > 0 ? formatCurrency(fin.totalCarrierCost || 0, tx.currency || 'IQD') : '0 (لا توجد أجور نقل)'}
+                                        </span>
+                                      </div>
+
+                                      {tx.transportTrips && tx.transportTrips.length > 0 ? (
+                                        <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1.5 border-t border-amber-500/20">
+                                          <span>عدد الشاحنات: <strong className="text-white font-mono">{tx.transportTrips.reduce((s, t) => s + (Number(t.truckCount) || 1), 0)} شاحنة</strong> ({tx.transportTrips.length} نقلة)</span>
+                                          {(tx.transportDocument || tx.transportTrips?.some(t => t.transportDocument)) && onViewArchive && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const doc = tx.transportDocument || tx.transportTrips?.find(t => t.transportDocument)?.transportDocument;
+                                                if (doc) onViewArchive(doc, `وصل استلام النقل - بوليصة ${tx.billNo}`);
+                                              }}
+                                              className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-md font-bold text-[10px] transition cursor-pointer"
+                                            >
+                                              <Eye className="w-3 h-3" />
+                                              <span>معاينة وصل النقل</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[10px] text-slate-400">لا توجد نقلات أو شاحنات برية مسجلة لهذه البوليصة.</div>
+                                      )}
+                                    </div>
+
+                                    {/* بطاقة المخلص والحاويات والوجهة */}
+                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1.5 text-[11px]">
+                                          <HardHat className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                          <span>المخلص المسؤول:</span>
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold text-white">{emp?.name || 'غير محدد'}</span>
+                                          {emp?.phone && <span className="text-[10px] text-slate-400 font-mono" dir="ltr">({emp.phone})</span>}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/80 flex-wrap gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <Ship className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                          <span className="text-slate-300 font-bold text-[11px]">{tx.containers.length} حاويات</span>
+                                          {tx.containerDestination && (
+                                            <span className="text-cyan-300 bg-cyan-950/40 px-2 py-0.2 rounded border border-cyan-800/60 text-[10px] font-bold">
+                                              📍 {tx.containerDestination}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {tx.containers.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                                            {tx.containers.slice(0, 3).map((cnt, i) => (
+                                              <span key={i} className="px-1.5 py-0.2 bg-slate-900 border border-slate-700/80 rounded text-slate-300">
+                                                {cnt}
+                                              </span>
+                                            ))}
+                                            {tx.containers.length > 3 && (
+                                              <span className="px-1 py-0.2 bg-slate-800 text-slate-400 rounded">
+                                                +{tx.containers.length - 3}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* بطاقة الملاحظات والوكالة */}
+                                    {(tx.notes || tx.agencyDocument || tx.cancelReason) && (
+                                      <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1.5 text-[11px]">
+                                        {tx.status === 'cancelled' && tx.cancelReason && (
+                                          <div className="text-rose-400 font-bold">
+                                            ⚠️ سبب الإلغاء: {tx.cancelReason}
+                                          </div>
+                                        )}
+                                        {tx.notes && (
+                                          <div className="text-slate-300">
+                                            <span className="text-slate-400 font-bold block mb-0.5">💬 ملاحظات وتوجيهات:</span>
+                                            <p className="line-clamp-2 text-slate-200">{tx.notes}</p>
+                                          </div>
+                                        )}
+                                        {tx.agencyDocument && (
+                                          <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
+                                            <span className="text-indigo-300 font-bold flex items-center gap-1">
+                                              <FileCheck2 className="w-3.5 h-3.5" />
+                                              <span>ورقة الوكالة الرسمية مؤرشفة</span>
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => onViewArchive && onViewArchive(tx.agencyDocument!, `ورقة الوكالة - بوليصة ${tx.billNo}`)}
+                                              className="px-2 py-0.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 text-[10px] font-bold border border-indigo-500/40 cursor-pointer"
+                                            >
+                                              معاينة الوكالة
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* 3. شريط الإجراءات السفلي داخل البوب أوفر */}
+                                <div className="flex items-center justify-between pt-2.5 border-t border-slate-800 flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenTransactionDetail(tx)}
+                                    className="text-xs text-emerald-400 hover:text-emerald-300 font-bold hover:underline flex items-center gap-1.5 transition cursor-pointer"
+                                  >
+                                    <span>عرض تفاصيل المعاملة بالكامل</span>
+                                    <span>↗</span>
+                                  </button>
+
+                                  <div className="flex items-center gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleRowExpand(tx.id)}
+                                      className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold hover:underline transition cursor-pointer"
+                                    >
+                                      {expandedRowIds.has(tx.id) ? 'طي الصف في الجدول ▴' : 'توسيع الصف في الجدول ▾'}
+                                    </button>
+                                    {(currentUser.role === 'admin' || currentUser.permissions.editTx) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onEditTransaction(tx)}
+                                        className="text-[11px] text-slate-200 hover:text-white font-semibold flex items-center gap-1.5 transition cursor-pointer bg-slate-800 hover:bg-slate-750 px-3 py-1 rounded-lg border border-slate-700"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        <span>تعديل البوليصة</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+
+                            {/* شارة رقم المعاملة الداخلي (Job No) */}
+                            {tx.jobNumber && (
+                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold shrink-0" title={`رقم المعاملة الداخلي: ${tx.jobNumber}`}>
+                                Job: {tx.jobNumber}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Col 2: الزبون (الشركة) */}
@@ -301,15 +549,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           {tx.isMixedCurrency && (
                             <div className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
                               ≈ {new Intl.NumberFormat('ar-IQ').format((fin.totalAmount || 0) + ((fin.totalAmountUSD || 0) * exchangeRate))} د.ع
-                            </div>
-                          )}
-                          {(fin.totalCarrierCost || 0) > 0 && (
-                            <div className="mt-1 flex flex-col gap-0.5">
-                              <div className="inline-flex items-center gap-1 text-[10px] text-amber-300 font-mono bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded" dir="rtl" title="أجور نقل متضمنة في العقد وتدفع للنواقل">
-                                <Truck className="w-3 h-3 text-amber-400" />
-                                <span>أجور نقل:</span>
-                                <span className="font-bold">{formatCurrency(fin.totalCarrierCost || 0, tx.currency || 'IQD')}</span>
-                              </div>
                             </div>
                           )}
                         </td>
@@ -425,6 +664,22 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                               );
                             })()}
 
+                            {/* زر صرف مصروف كمركي / تشغيلي على البوليصة */}
+                            {onOpenAddExpense && (
+                              <button
+                                onClick={() => onOpenAddExpense(tx)}
+                                disabled={tx.status === 'cancelled'}
+                                title="صرف مصروف كمركي أو تشغيلي على هذه البوليصة (رسوم، موانئ، سونار، فحص، عمال، نثريات)"
+                                className={`p-1.5 rounded-xl transition ${
+                                  tx.status === 'cancelled'
+                                    ? 'bg-slate-900 text-slate-600 cursor-not-allowed opacity-50'
+                                    : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30'
+                                }`}
+                              >
+                                <span className="text-xs">💸</span>
+                              </button>
+                            )}
+
                             {(currentUser.role === 'admin' || currentUser.permissions.editTx) && (
                               <button
                                 onClick={() => onEditTransaction(tx)}
@@ -445,124 +700,132 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         </td>
                       </tr>
 
-                      {/* الصف الثاني (Row 2): التواريخ، المخلص، أرقام الحاويات، وحالة المعاملة */}
-                      <tr className="bg-slate-950/60 hover:bg-slate-850/60 transition-colors border-b border-slate-800/80 text-[11px]">
-                        {/* Cell 1: تاريخ الإنشاء + تاريخ الاستلام */}
-                        <td className="pt-1 pb-3 px-4">
-                          <div className="flex flex-wrap items-center gap-2 text-slate-400">
-                            <div className="flex items-center gap-1 font-mono text-[11px] bg-slate-900/90 px-2 py-0.5 rounded-lg border border-slate-800">
-                              <Calendar className="w-3 h-3 text-emerald-400 shrink-0" />
-                              <span className="text-slate-400">إنشاء:</span>
-                              <span className="font-semibold text-slate-200">{tx.createdAt || tx.date || '—'}</span>
+                      {/* الصف الثاني (Row 2): مخفي تماماً افتراضياً ويظهر فقط عند الرغبة في توسيع الصف من البوب أوفر */}
+                      {expandedRowIds.has(tx.id) && (
+                        <tr className="bg-slate-950/60 hover:bg-slate-850/60 transition-colors border-b border-slate-800/80 text-[11px] animate-in fade-in">
+                          {/* Cell 1: تاريخ الإنشاء + تاريخ الاستلام */}
+                          <td className="pt-1 pb-3 px-4">
+                            <div className="flex flex-wrap items-center gap-2 text-slate-400">
+                              <div className="flex items-center gap-1 font-mono text-[11px] bg-slate-900/90 px-2 py-0.5 rounded-lg border border-slate-800">
+                                <Calendar className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span className="text-slate-400">إنشاء:</span>
+                                <span className="font-semibold text-slate-200">{tx.createdAt || tx.date || '—'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 font-mono text-[11px] bg-slate-900/90 px-2 py-0.5 rounded-lg border border-slate-800">
+                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="text-slate-400">استلام:</span>
+                                <span className="text-slate-300">{tx.date || '—'}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1 font-mono text-[11px] bg-slate-900/90 px-2 py-0.5 rounded-lg border border-slate-800">
-                              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="text-slate-400">استلام:</span>
-                              <span className="text-slate-300">{tx.date || '—'}</span>
-                            </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Cell 2: المخلص الكمركي المسؤول */}
-                        <td className="pt-1 pb-3 px-4">
-                          <div className="flex items-center gap-1.5 text-slate-300">
-                            <HardHat className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span className="font-semibold text-slate-200">{emp?.name || 'غير محدد'}</span>
-                          </div>
-                          {emp?.phone && (
-                            <div className="text-[10px] text-slate-500 font-mono mt-0.5" dir="ltr">
-                              {emp.phone}
+                          {/* Cell 2: المخلص الكمركي المسؤول */}
+                          <td className="pt-1 pb-3 px-4">
+                            <div className="flex items-center gap-1.5 text-slate-300">
+                              <HardHat className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span className="font-semibold text-slate-200">{emp?.name || 'غير محدد'}</span>
                             </div>
-                          )}
-                        </td>
+                            {emp?.phone && (
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5" dir="ltr">
+                                {emp.phone}
+                              </div>
+                            )}
+                          </td>
 
-                        {/* Cell 3 & 4: الحاويات وأرقامها الفعلية + النقل البري (تمتد لعمودين colSpan={2}) */}
-                        <td colSpan={2} className="pt-1 pb-3 px-4">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <div className="flex items-center gap-1 bg-cyan-950/50 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded-lg font-bold text-[10px] shrink-0">
-                              <Ship className="w-3 h-3" />
-                              <span>{tx.containers.length} حاويات</span>
-                            </div>
-                            {tx.containers.length > 0 ? (
-                              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
-                                {tx.containers.slice(0, 4).map((cnt, i) => (
-                                  <span key={i} className="px-1.5 py-0.5 bg-slate-900 border border-slate-700/80 rounded text-slate-300">
-                                    {cnt}
+                          {/* Cell 3 & 4: الحاويات وأرقامها الفعلية + النقل البري (تمتد لعمودين colSpan={2}) */}
+                          <td colSpan={2} className="pt-1 pb-3 px-4">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-1 bg-cyan-950/50 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded-lg font-bold text-[10px] shrink-0">
+                                <Ship className="w-3 h-3" />
+                                <span>{tx.containers.length} حاويات</span>
+                              </div>
+                              {tx.containerDestination && (
+                                <div className="flex items-center gap-1 bg-slate-900 border border-slate-700/80 text-cyan-300 px-2 py-0.5 rounded-lg text-[10px] shrink-0 font-medium" title={`وجهة الحاوية: ${tx.containerDestination}`}>
+                                  <span>📍</span>
+                                  <span>{tx.containerDestination}</span>
+                                </div>
+                              )}
+                              {tx.containers.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                                  {tx.containers.slice(0, 4).map((cnt, i) => (
+                                    <span key={i} className="px-1.5 py-0.5 bg-slate-900 border border-slate-700/80 rounded text-slate-300">
+                                      {cnt}
+                                    </span>
+                                  ))}
+                                  {tx.containers.length > 4 && (
+                                    <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded font-semibold">
+                                      +{tx.containers.length - 4} أخرى
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-normal">لا توجد أرقام حاويات</span>
+                              )}
+
+                              {tx.transportTrips && tx.transportTrips.length > 0 && (
+                                <div className="flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg font-bold text-[10px] shrink-0">
+                                  <Truck className="w-3 h-3" />
+                                  <span>
+                                    نقل بري: {tx.transportTrips.reduce((s, t) => s + (Number(t.truckCount) || 1), 0)} شاحنة
                                   </span>
-                                ))}
-                                {tx.containers.length > 4 && (
-                                  <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded font-semibold">
-                                    +{tx.containers.length - 4} أخرى
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 font-normal">لا توجد أرقام حاويات</span>
-                            )}
+                                </div>
+                              )}
 
-                            {tx.transportTrips && tx.transportTrips.length > 0 && (
-                              <div className="flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg font-bold text-[10px] shrink-0">
-                                <Truck className="w-3 h-3" />
-                                <span>
-                                  نقل بري: {tx.transportTrips.reduce((s, t) => s + (Number(t.truckCount) || 1), 0)} شاحنة
-                                </span>
-                              </div>
-                            )}
-
-                            {(tx.transportDocument || tx.transportTrips?.some(t => t.transportDocument)) && onViewArchive && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const doc = tx.transportDocument || tx.transportTrips?.find(t => t.transportDocument)?.transportDocument;
-                                  if (doc) onViewArchive(doc, `وصل استلام النقل - بوليصة ${tx.billNo}`);
-                                }}
-                                className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-lg font-bold text-[10px] transition"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>وصل النقل</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Cell 5 & 6: حالة المعاملة والملاحظات (تمتد لعمودين colSpan={2}) */}
-                        <td colSpan={2} className="pt-1 pb-3 px-4">
-                          <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-400 font-medium">الحالة:</span>
-                              <select
-                                value={tx.status}
-                                disabled={!currentUser.permissions.editTx}
-                                onChange={(e) => onTryChangeStatus(tx, e.target.value as any)}
-                                className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border transition cursor-pointer ${
-                                  tx.status === 'completed'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                    : tx.status === 'pending'
-                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                                    : tx.status === 'cancelled'
-                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                                }`}
-                              >
-                                <option value="pending" className="bg-slate-900 text-amber-400">⏳ قيد التنفيذ</option>
-                                <option value="completed" className="bg-slate-900 text-emerald-400">✅ منجزة</option>
-                                <option value="issue" className="bg-slate-900 text-rose-400">⚠️ معلقة</option>
-                                <option value="cancelled" className="bg-slate-900 text-rose-300">❌ ملغاة دفترياً</option>
-                              </select>
+                              {(tx.transportDocument || tx.transportTrips?.some(t => t.transportDocument)) && onViewArchive && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const doc = tx.transportDocument || tx.transportTrips?.find(t => t.transportDocument)?.transportDocument;
+                                    if (doc) onViewArchive(doc, `وصل استلام النقل - بوليصة ${tx.billNo}`);
+                                  }}
+                                  className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-lg font-bold text-[10px] transition"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>وصل النقل</span>
+                                </button>
+                              )}
                             </div>
+                          </td>
 
-                            {tx.status === 'cancelled' && tx.cancelReason ? (
-                              <div className="text-[10px] text-rose-400 truncate max-w-[200px]" title={tx.cancelReason}>
-                                ⚠️ سبب الإلغاء: {tx.cancelReason}
+                          {/* Cell 5 & 6: حالة المعاملة والملاحظات (تمتد لعمودين colSpan={2}) */}
+                          <td colSpan={2} className="pt-1 pb-3 px-4">
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-400 font-medium">الحالة:</span>
+                                <select
+                                  value={tx.status}
+                                  disabled={!currentUser.permissions.editTx}
+                                  onChange={(e) => onTryChangeStatus(tx, e.target.value as any)}
+                                  className={`rounded-xl px-2.5 py-1 text-[11px] font-bold border transition cursor-pointer ${
+                                    tx.status === 'completed'
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                      : tx.status === 'pending'
+                                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                      : tx.status === 'cancelled'
+                                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                  }`}
+                                >
+                                  <option value="pending" className="bg-slate-900 text-amber-400">⏳ قيد التنفيذ</option>
+                                  <option value="completed" className="bg-slate-900 text-emerald-400">✅ منجزة</option>
+                                  <option value="issue" className="bg-slate-900 text-rose-400">⚠️ معلقة</option>
+                                  <option value="cancelled" className="bg-slate-900 text-rose-300">❌ ملغاة دفترياً</option>
+                                </select>
                               </div>
-                            ) : tx.notes ? (
-                              <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={tx.notes}>
-                                💬 {tx.notes}
-                              </div>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
+
+                              {tx.status === 'cancelled' && tx.cancelReason ? (
+                                <div className="text-[10px] text-rose-400 truncate max-w-[200px]" title={tx.cancelReason}>
+                                  ⚠️ سبب الإلغاء: {tx.cancelReason}
+                                </div>
+                              ) : tx.notes ? (
+                                <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={tx.notes}>
+                                  💬 {tx.notes}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </React.Fragment>
                   );
                 })

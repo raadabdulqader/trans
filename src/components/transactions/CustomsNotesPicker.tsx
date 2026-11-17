@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Trash2, CheckCheck } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { CUSTOMS_PRESET_NOTES, CustomsPresetNote } from '../../utils/customsNotes';
 
@@ -51,67 +51,82 @@ export const CustomsNotesPicker: React.FC<CustomsNotesPickerProps> = ({
   };
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <label className="text-slate-300 font-semibold text-[11px] flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>ملاحظات وتوجيهات البوليصة</span>
+    <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-750 shadow-xs space-y-3.5">
+      <div className="flex items-center justify-between pb-2.5 border-b border-slate-800 flex-wrap gap-2">
+        <label className="text-white font-bold text-xs sm:text-sm flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shrink-0">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <span>الملاحظات النموذجية والتوجيهات الكمركية</span>
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleAddAllPresetNotes}
-            className="text-[10px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-0.5 transition"
-            title="إضافة الملاحظات النموذجية إلى البوليصة"
+            className="text-xs text-emerald-400 hover:text-emerald-300 font-bold hover:underline flex items-center gap-1 transition"
+            title="إضافة كافة العبارات النموذجية إلى ملاحظات البوليصة"
           >
-            + تطبيق الكل
+            <CheckCheck className="w-3.5 h-3.5" />
+            <span>تطبيق الكل</span>
           </button>
           {notes && (
             <button
               type="button"
               onClick={() => setNotes('')}
-              className="text-[10px] text-slate-500 hover:text-rose-400 transition"
+              className="text-xs text-rose-400 hover:text-rose-300 font-bold hover:underline flex items-center gap-1 transition"
+              title="مسح حقل الملاحظات بالكامل"
             >
-              مسح
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>مسح</span>
             </button>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {CUSTOMS_PRESET_NOTES.map((preset) => {
-          const active = isNoteActive(preset);
-          return (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => handleTogglePresetNote(preset)}
-              title={preset.description}
-              className="group text-right focus:outline-none"
-            >
-              <Badge
-                variant={active ? 'default' : preset.variant}
-                className={`cursor-pointer transition-all duration-150 py-0.5 px-2 text-[10px] select-none ${
-                  active
-                    ? 'ring-1 ring-emerald-400/80 shadow-xs'
-                    : 'opacity-85 hover:opacity-100 hover:border-slate-500'
-                }`}
+      {/* Preset Chips */}
+      <div className="space-y-1.5">
+        <div className="text-[11px] text-slate-400 font-medium">
+          عبارات كمركية جاهزة (اضغط للإضافة أو الحذف السريع):
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {CUSTOMS_PRESET_NOTES.map((preset) => {
+            const active = isNoteActive(preset);
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => handleTogglePresetNote(preset)}
+                title={preset.description}
+                className="group text-right focus:outline-none"
               >
-                <span className="font-bold">{active ? '✓' : '+'}</span>
-                <span>{preset.badgeLabel}</span>
-              </Badge>
-            </button>
-          );
-        })}
+                <Badge
+                  variant={active ? 'default' : preset.variant}
+                  className={`cursor-pointer transition-all duration-150 py-1.5 px-3 text-xs font-bold select-none rounded-xl flex items-center gap-1.5 ${
+                    active
+                      ? 'bg-emerald-500 text-slate-950 ring-2 ring-emerald-400/80 shadow-md font-black'
+                      : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+                  }`}
+                >
+                  <span className="font-mono font-black">{active ? '✓' : '+'}</span>
+                  <span>{preset.badgeLabel}</span>
+                </Badge>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <textarea
-        rows={2}
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="اكتب ملاحظاتك وتوجيهاتك الكمركية هنا..."
-        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 focus:border-emerald-500 focus:outline-none resize-none text-[11px]"
-      />
+      {/* Textarea */}
+      <div className="space-y-1.5 pt-1">
+        <label className="block text-slate-200 font-bold text-xs">نص الملاحظات والتوجيهات المطبوعة على الوصل والفاتورة:</label>
+        <textarea
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="اكتب ملاحظاتك وتوجيهاتك الكمركية هنا (ستظهر تلقائياً في فواتير الزبون والتقارير)..."
+          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 font-medium text-xs sm:text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none resize-none leading-relaxed"
+        />
+      </div>
     </div>
   );
 };

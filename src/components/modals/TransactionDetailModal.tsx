@@ -128,6 +128,11 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white font-mono">{transaction.billNo}</h2>
+                {transaction.jobNumber && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                    Job: {transaction.jobNumber}
+                  </span>
+                )}
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp.badgeClass}`}>
                   🏢 {comp.shortName}
                 </span>
@@ -179,7 +184,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           )}
 
           {/* General Information Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
               <span className="text-slate-400 block mb-1">الزبون (الشركة):</span>
               <strong className="text-white text-sm">{customer?.name || '—'}</strong>
@@ -204,16 +209,34 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               </div>
               <div className="text-[10px] text-slate-400 mt-1">نوع البضاعة: {transaction.goodsType || 'عامة'}</div>
             </div>
+
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-slate-400 block mb-1">محددات الشحنة والحاوية:</span>
+              <div className="text-[11px] text-slate-300">
+                <span className="text-slate-400">رقم المعاملة (Job No): </span>
+                <strong className="text-cyan-300 font-mono">{transaction.jobNumber || '—'}</strong>
+              </div>
+              <div className="text-[11px] text-slate-300 mt-0.5">
+                <span className="text-slate-400">فترة السماح (Free Time): </span>
+                <strong className="text-amber-400 font-mono">{transaction.freeTimeDays ? `${transaction.freeTimeDays} يوم` : '—'}</strong>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1 truncate" title={transaction.containerDestination}>
+                وجهة الحاوية: <span className="text-slate-200 font-semibold">{transaction.containerDestination || '—'}</span>
+              </div>
+            </div>
           </div>
 
           {/* Operational Milestones Timeline (أمر التسليم، التخليص، خروج الشحنة، عودة الحاوية) */}
           <BillMilestonesTimeline
             billNo={transaction.billNo}
+            jobNumber={transaction.jobNumber}
             deliveryOrderDate={transaction.deliveryOrderDate}
             clearanceDate={transaction.clearanceDate}
             exitDate={transaction.exitDate}
             containerReturnDate={transaction.containerReturnDate}
             containersCount={transaction.containers?.length || 0}
+            freeTimeDays={transaction.freeTimeDays}
+            containerDestination={transaction.containerDestination}
             onUpdateDates={onUpdateOperationalDates ? (updates) => onUpdateOperationalDates(transaction, updates) : undefined}
           />
 
@@ -355,11 +378,23 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
           {/* Containers Section */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <Boxes className="w-4 h-4 text-cyan-400" />
                 <span>أرقام الحاويات المسجلة ({transaction.containers.length}):</span>
               </span>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+                {transaction.containerDestination && (
+                  <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
+                    📍 الوجهة: <strong className="text-white">{transaction.containerDestination}</strong>
+                  </span>
+                )}
+                {transaction.freeTimeDays && (
+                  <span className="px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 border border-slate-700 font-mono">
+                    ⏳ سماح: <strong>{transaction.freeTimeDays} يوم</strong>
+                  </span>
+                )}
+              </div>
             </div>
 
             {transaction.containers.length === 0 ? (

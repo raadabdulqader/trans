@@ -9,17 +9,22 @@ import {
   Clock, 
   Edit3, 
   Check, 
-  AlertTriangle 
+  AlertTriangle,
+  Hourglass,
+  MapPin
 } from 'lucide-react';
 import { DatePicker } from '../ui/date-picker';
 
 export interface BillMilestonesTimelineProps {
   billNo: string;
+  jobNumber?: string;
   deliveryOrderDate?: string;
   clearanceDate?: string;
   exitDate?: string;
   containerReturnDate?: string;
   containersCount?: number;
+  freeTimeDays?: number;
+  containerDestination?: string;
   onUpdateDates?: (updates: {
     deliveryOrderDate?: string;
     clearanceDate?: string;
@@ -30,11 +35,14 @@ export interface BillMilestonesTimelineProps {
 
 export const BillMilestonesTimeline: React.FC<BillMilestonesTimelineProps> = ({
   billNo,
+  jobNumber,
   deliveryOrderDate,
   clearanceDate,
   exitDate,
   containerReturnDate,
   containersCount = 0,
+  freeTimeDays,
+  containerDestination,
   onUpdateDates,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -116,6 +124,34 @@ export const BillMilestonesTimeline: React.FC<BillMilestonesTimelineProps> = ({
   // Check if containers might be at risk of demurrage/detention (exitDate set, but containerReturnDate not set)
   const isAwaitingReturn = !!exitDate && !containerReturnDate && containersCount > 0;
 
+  const baseDate = exitDate || deliveryOrderDate;
+  const numFreeDays = Number(freeTimeDays) || 0;
+  let deadlineDateStr: string | null = null;
+  let daysRemaining: number | null = null;
+  let isOverdue = false;
+
+  if (baseDate && numFreeDays > 0) {
+    try {
+      const baseD = new Date(baseDate);
+      const deadD = new Date(baseD);
+      deadD.setDate(baseD.getDate() + numFreeDays);
+      deadlineDateStr = deadD.toISOString().split('T')[0];
+
+      if (!containerReturnDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const target = new Date(deadD);
+        target.setHours(0, 0, 0, 0);
+        const diffMs = target.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        daysRemaining = diffDays;
+        isOverdue = diffDays < 0;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 shadow-lg space-y-3.5">
       {/* Header Bar */}
@@ -130,6 +166,11 @@ export const BillMilestonesTimeline: React.FC<BillMilestonesTimelineProps> = ({
               <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-slate-900 border border-slate-700 text-slate-300">
                 {completedCount} من 4 مراحل مكتملة
               </span>
+              {jobNumber && (
+                <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold">
+                  Job: {jobNumber}
+                </span>
+              )}
             </div>
             <p className="text-[10px] text-slate-400">
               تتبع الإجراءات من استلام أمر التسليم حتى تفريغ وإعادة الحاوية
@@ -170,6 +211,51 @@ export const BillMilestonesTimeline: React.FC<BillMilestonesTimelineProps> = ({
           )}
         </div>
       </div>
+
+      {/* Operational Parameters Strip (Job No, Container Destination, Free Time) */}
+      {(jobNumber || containerDestination || numFreeDays > 0) && (
+        <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-4 flex-wrap">
+            {jobNumber && (
+              <div className="flex items-center gap-1.5 font-mono">
+                <span className="text-slate-400 text-[10px]">رقم المعاملة:</span>
+                <strong className="text-cyan-300 font-bold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">{jobNumber}</strong>
+              </div>
+            )}
+            {containerDestination && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="text-slate-400 text-[10px]">وجهة الحاوية:</span>
+                <strong className="text-slate-200">{containerDestination}</strong>
+              </div>
+            )}
+            {numFreeDays > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Hourglass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-slate-400 text-[10px]">فترة السماح (Free Time):</span>
+                <strong className="text-amber-400 font-mono">{numFreeDays} يوم</strong>
+                {deadlineDateStr && (
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    (أقصى موعد: {deadlineDateStr})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {deadlineDateStr && !containerReturnDate && daysRemaining !== null && (
+            <div className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border font-mono ${
+              isOverdue
+                ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                : daysRemaining <= 3
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+            }`}>
+              {isOverdue ? `⚠️ تجاوز السماح بـ ${Math.abs(daysRemaining)} يوم!` : daysRemaining === 0 ? '⚠️ ينتهي اليوم!' : `متبقي ${daysRemaining} يوم سماح`}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Progress Track */}
       <div className="relative">

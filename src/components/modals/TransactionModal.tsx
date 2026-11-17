@@ -79,6 +79,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<ModalTab>('general');
   const [billNo, setBillNo] = useState('');
+  const [jobNumber, setJobNumber] = useState('');
+  const [freeTimeDays, setFreeTimeDays] = useState<number | ''>(14);
+  const [containerDestination, setContainerDestination] = useState('');
   const [companyId, setCompanyId] = useState<CompanyId>('naqaa_basra');
   const [currency, setCurrency] = useState<Currency>('IQD');
   const [localRate, setLocalRate] = useState<number>(normalizeExchangeRate(exchangeRate, 1500));
@@ -122,6 +125,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setActiveTab('general');
     if (initialData) {
       setBillNo(initialData.billNo);
+      setJobNumber(initialData.jobNumber || '');
+      setFreeTimeDays(initialData.freeTimeDays !== undefined && initialData.freeTimeDays !== null ? initialData.freeTimeDays : '');
+      setContainerDestination(initialData.containerDestination || '');
       setCompanyId(initialData.companyId || 'naqaa_basra');
       setCurrency(initialData.currency || 'IQD');
       setIsMixedCurrency(!!initialData.isMixedCurrency);
@@ -146,7 +152,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setTransportDocument(initialData.transportDocument);
     } else {
       const randomBill = `BL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const randomJob = `JOB-2026-${Math.floor(1000 + Math.random() * 9000)}`;
       setBillNo(randomBill);
+      setJobNumber(randomJob);
+      setFreeTimeDays(14);
+      setContainerDestination('');
       setCompanyId('naqaa_basra');
       setCurrency('IQD');
       setIsMixedCurrency(false);
@@ -258,6 +268,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const handleGenerateNewBillNo = () => {
     const randomBill = `BL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     setBillNo(randomBill);
+  };
+
+  const handleGenerateNewJobNo = () => {
+    const randomJob = `JOB-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    setJobNumber(randomJob);
   };
 
   const handleFooterAgencyUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,6 +455,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     onSave({
       id: initialData?.id,
       billNo,
+      jobNumber: jobNumber.trim() || undefined,
+      freeTimeDays: freeTimeDays === '' ? undefined : Number(freeTimeDays),
+      containerDestination: containerDestination.trim() || undefined,
       companyId,
       customerId,
       employeeId,
@@ -468,36 +486,41 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl lg:max-w-5xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-slate-900 border border-slate-750 rounded-3xl max-w-5xl xl:max-w-6xl w-full shadow-2xl overflow-hidden max-h-[94vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
         
-        {/* Header - Fixed at top */}
-        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold shadow-xs">
+        {/* Header - Fixed at top with prominent identity */}
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/95 shrink-0">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-xl shadow-inner shrink-0">
               📑
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-white">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black text-white tracking-wide">
                   {initialData ? 'تعديل بيانات البوليصة الكمركية' : 'تسجيل بوليصة كمركية جديدة'}
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                <span className="px-2.5 py-0.5 rounded-xl text-xs font-mono font-bold bg-slate-800 text-emerald-300 border border-slate-700 shadow-xs">
                   {billNo || 'جديد'}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${COMPANIES[companyId]?.badgeClass}`}>
+                {jobNumber && (
+                  <span className="px-2.5 py-0.5 rounded-xl text-xs font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-xs">
+                    Job: {jobNumber}
+                  </span>
+                )}
+                <span className={`px-2.5 py-0.5 rounded-xl text-xs font-bold border shadow-xs ${COMPANIES[companyId]?.badgeClass}`}>
                   {COMPANIES[companyId]?.name}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                إدخال بيانات المعاملة، التخليص الكمركي، المراحل التشغيلية، الحساب المالي، والنقل
+              <p className="text-xs text-slate-300 font-medium mt-0.5">
+                إدخال بيانات المعاملة، التخليص الكمركي، المراحل التشغيلية، الإنفاق المالي، وحسابات النقل
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            title="إغلاق"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            title="إغلاق النافذة"
           >
             <X className="w-5 h-5" />
           </button>
@@ -506,7 +529,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         {/* Form Container */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           {formError && (
-            <div className="mx-5 mt-3 p-2.5 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-between gap-2 shrink-0 animate-in fade-in">
+            <div className="mx-6 mt-3.5 p-3 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-rose-300 text-xs font-bold flex items-center justify-between gap-2 shrink-0 animate-in fade-in">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 <span>{formError}</span>
@@ -514,7 +537,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={() => setFormError(null)}
-                className="text-rose-400 hover:text-white text-xs font-bold px-1"
+                className="text-rose-400 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded-lg hover:bg-rose-500/20"
               >
                 ✕
               </button>
@@ -522,28 +545,28 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           )}
 
           {initialData?.status === 'cancelled' && (
-            <div className="mx-5 mt-3 p-2.5 bg-amber-500/15 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center gap-2 shrink-0">
+            <div className="mx-6 mt-3.5 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-amber-300 text-xs font-semibold flex items-center gap-2 shrink-0">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
               <span>هذه البوليصة ملغاة دفترياً ومحاسبياً. التعديل هنا للبيانات الإيضاحية فقط دون التأثير على القيود المحاسبية الملغاة.</span>
             </div>
           )}
 
           {/* Elegant Top Tabs Navigation Bar */}
-          <div className="px-4 sm:px-5 py-2.5 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
-            <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="px-5 sm:px-6 py-2.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
+            <div className="flex items-center gap-2">
               {/* Tab 1 */}
               <button
                 type="button"
                 onClick={() => setActiveTab('general')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
                   activeTab === 'general'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs ring-1 ring-emerald-500/30'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/40'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:bg-slate-850'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                <FileText className="w-4 h-4 text-emerald-400" />
                 <span>1. البيانات والمراحل</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-slate-950 text-emerald-300 border border-slate-800">
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-950 text-emerald-300 border border-slate-800">
                   {milestonesCount}/4
                 </span>
               </button>
@@ -552,16 +575,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('financial')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
                   activeTab === 'financial'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs ring-1 ring-amber-500/30'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm ring-1 ring-amber-500/40'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:bg-slate-850'
                 }`}
               >
-                <Coins className="w-3.5 h-3.5 text-amber-400" />
-                <span>2. الاتفاق المالي</span>
+                <Coins className="w-4 h-4 text-amber-400" />
+                <span>2. الإنفاق المالي</span>
                 {(totalAmount > 0 || (totalAmountUSD || 0) > 0) && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-slate-950 text-amber-300 border border-slate-800">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-950 text-amber-300 border border-slate-800">
                     {isMixedCurrency ? 'مركب' : currency}
                   </span>
                 )}
@@ -571,16 +594,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('transport')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
                   activeTab === 'transport'
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-xs ring-1 ring-cyan-500/30'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm ring-1 ring-cyan-500/40'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:bg-slate-850'
                 }`}
               >
-                <Truck className="w-3.5 h-3.5 text-cyan-400" />
+                <Truck className="w-4 h-4 text-cyan-400" />
                 <span>3. الحاويات والنقل</span>
                 {containers.length > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-slate-950 text-cyan-300 border border-slate-800">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-slate-950 text-cyan-300 border border-slate-800">
                     {containers.length}
                   </span>
                 )}
@@ -590,26 +613,26 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('notes')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
                   activeTab === 'notes'
-                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-xs ring-1 ring-purple-500/30'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm ring-1 ring-purple-500/40'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:bg-slate-850'
                 }`}
               >
-                <Paperclip className="w-3.5 h-3.5 text-purple-400" />
+                <Paperclip className="w-4 h-4 text-purple-400" />
                 <span>4. الوكالة والملاحظات</span>
                 {agencyDocument && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     ✓ الوكالة
                   </span>
                 )}
               </button>
             </div>
 
-            <div className="hidden md:flex items-center gap-1 text-[11px] text-slate-400">
-              <span>القسم:</span>
-              <strong className="text-white">
-                {activeTab === 'general' ? 'البيانات الأساسية والمراحل التشغيلية' : activeTab === 'financial' ? 'الاتفاق المالي وحساب الزبون' : activeTab === 'transport' ? 'الحاويات وأجور النقل البري' : 'ورقة الوكالة والملاحظات'}
+            <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <span>القسم النشط:</span>
+              <strong className="text-white font-bold">
+                {activeTab === 'general' ? 'البيانات الأساسية والمراحل التشغيلية' : activeTab === 'financial' ? 'الإنفاق المالي وحساب الزبون' : activeTab === 'transport' ? 'الحاويات وأجور النقل البري' : 'ورقة الوكالة والملاحظات'}
               </strong>
             </div>
           </div>
@@ -621,71 +644,91 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {activeTab === 'general' && (
               <div className="space-y-4 animate-in fade-in duration-200 text-xs">
                 {/* 1. اختيار الشركة المسؤولة */}
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-750 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-200 font-bold text-xs flex items-center gap-1.5">
+                    <label className="text-slate-100 font-bold text-xs sm:text-sm flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-emerald-400" />
                       <span>الشركة التابعة لها البوليصة / الفاتورة <span className="text-rose-400">*</span></span>
                     </label>
-                    <span className="text-[10px] text-slate-400 font-mono">نظام مالي وصندوق موحد</span>
+                    <span className="text-[11px] text-slate-400 font-mono font-semibold bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                      نظام مالي وصندوق موحد
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <button
                       type="button"
                       onClick={() => setCompanyId('naqaa_basra')}
-                      className={`p-3 rounded-xl border text-right transition flex items-center gap-3 ${
+                      className={`p-3.5 rounded-2xl border text-right transition flex items-center gap-3.5 ${
                         companyId === 'naqaa_basra'
-                          ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/50'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                          ? 'bg-emerald-500/15 border-emerald-500 text-white shadow-md ring-2 ring-emerald-500/40'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
                       }`}
                     >
-                      <div className="w-3 h-3 rounded-full bg-emerald-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-emerald-300">شركة نقاء البصرة</div>
-                        <div className="text-[10px] text-slate-400">للتخليص الكمركي والنقل العام</div>
+                      <div className="w-4 h-4 rounded-full bg-emerald-400 shrink-0 shadow-sm shadow-emerald-400/50" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-sm text-emerald-300">شركة نقاء البصرة</span>
+                          {companyId === 'naqaa_basra' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                              ✓ معتمدة
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-300 font-medium mt-0.5">للتخليص الكمركي والنقل العام والخدمات اللوجستية</div>
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCompanyId('sawt_aljanoub')}
-                      className={`p-3 rounded-xl border text-right transition flex items-center gap-3 ${
+                      className={`p-3.5 rounded-2xl border text-right transition flex items-center gap-3.5 ${
                         companyId === 'sawt_aljanoub'
-                          ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-sm ring-1 ring-cyan-500/50'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                          ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-md ring-2 ring-cyan-500/40'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
                       }`}
                     >
-                      <div className="w-3 h-3 rounded-full bg-cyan-400 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-cyan-300">شركة صوت الجنوب</div>
-                        <div className="text-[10px] text-slate-400">للتخليص الكمركي والخدمات اللوجستية</div>
+                      <div className="w-4 h-4 rounded-full bg-cyan-400 shrink-0 shadow-sm shadow-cyan-400/50" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-sm text-cyan-300">شركة صوت الجنوب</span>
+                          {companyId === 'sawt_aljanoub' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                              ✓ معتمدة
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-300 font-medium mt-0.5">للتخليص الكمركي والخدمات اللوجستية والملاحة</div>
                       </div>
                     </button>
                   </div>
                 </div>
 
-                {/* 2. بيانات المعاملة والجهات */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5 pb-2 border-b border-slate-800/80">
-                    <FileText className="w-4 h-4 text-emerald-400" />
-                    <span>البيانات الأساسية وأطراف المعاملة</span>
+                {/* 2. بيانات المعاملة وأطرافها */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-750 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800/80">
+                    <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-emerald-400" />
+                      <span>هوية البوليصة والبيانات الأساسية للمعاملة</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-medium">أرقام التتبع والتوثيق</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Grid 1: B/L No, Job No, Date, Status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-slate-300 font-semibold text-[11px]">
-                          رقم البوليصة <span className="text-rose-400">*</span>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-slate-200 font-bold text-xs">
+                          رقم البوليصة (B/L) <span className="text-rose-400">*</span>
                         </label>
                         {!initialData && (
                           <button
                             type="button"
                             onClick={handleGenerateNewBillNo}
-                            className="text-[10px] text-emerald-400 hover:underline flex items-center gap-0.5"
+                            className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline flex items-center gap-1"
                             title="توليد رقم عشوائي جديد"
                           >
-                            <Sparkles className="w-2.5 h-2.5" /> توليد
+                            <Sparkles className="w-3 h-3" /> توليد
                           </button>
                         )}
                       </div>
@@ -695,12 +738,37 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         value={billNo}
                         onChange={(e) => setBillNo(e.target.value)}
                         placeholder="BL-2026-..."
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-emerald-500 focus:outline-none text-xs font-bold"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-emerald-300 font-mono text-sm font-black focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">تاريخ فتح المعاملة / الاستلام</label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-slate-200 font-bold text-xs">
+                          رقم المعاملة (Job No)
+                        </label>
+                        {!initialData && (
+                          <button
+                            type="button"
+                            onClick={handleGenerateNewJobNo}
+                            className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold hover:underline flex items-center gap-1"
+                            title="توليد رقم معاملة جديد"
+                          >
+                            <Sparkles className="w-3 h-3" /> توليد
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={jobNumber}
+                        onChange={(e) => setJobNumber(e.target.value)}
+                        placeholder="JOB-2026-..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-cyan-300 font-mono text-sm font-black focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-200 font-bold text-xs mb-1.5">تاريخ فتح المعاملة / الاستلام</label>
                       <DatePicker
                         value={date}
                         onChange={(d) => setDate(d)}
@@ -709,65 +777,66 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">حالة المعاملة</label>
+                      <label className="block text-slate-200 font-bold text-xs mb-1.5">حالة المعاملة التشغيلية</label>
                       <select
                         value={status}
                         onChange={(e) => setStatus(e.target.value as any)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 font-bold text-xs focus:border-emerald-500 focus:outline-none"
                       >
-                        <option value="pending">⏳ قيد التنفيذ</option>
-                        <option value="issue">⚠️ معلقة</option>
-                        <option value="completed">✅ منجزة</option>
+                        <option value="pending" className="bg-slate-900 text-amber-400 font-bold">⏳ قيد التنفيذ (Pending)</option>
+                        <option value="issue" className="bg-slate-900 text-rose-400 font-bold">⚠️ معلقة وبها إشكال (Issue)</option>
+                        <option value="completed" className="bg-slate-900 text-emerald-400 font-bold">✅ منجزة ومخلصة (Completed)</option>
                       </select>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800/80">
+                  {/* Grid 2: Customer, Broker, Goods */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3 border-t border-slate-800">
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
+                      <label className="block text-slate-200 font-bold text-xs mb-1.5">
                         الزبون (الشركة / التاجر) <span className="text-rose-400">*</span>
                       </label>
                       <select
                         required
                         value={customerId}
                         onChange={(e) => setCustomerId(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 font-bold text-xs focus:border-emerald-500 focus:outline-none"
                       >
-                        <option value="">-- اختر الزبون --</option>
+                        <option value="">-- اختر الزبون التجاري --</option>
                         {customers.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
+                          <option key={c.id} value={c.id} className="bg-slate-900 text-white font-bold">{c.name} {c.phone ? `(${c.phone})` : ''}</option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">المخلص الكمركي المسؤول</label>
+                      <label className="block text-slate-200 font-bold text-xs mb-1.5">المخلص الكمركي المسؤول</label>
                       <select
                         value={employeeId}
                         onChange={(e) => setEmployeeId(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none text-xs font-semibold"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 font-bold text-xs focus:border-emerald-500 focus:outline-none"
                       >
-                        <option value="">-- اختر المخلص --</option>
+                        <option value="">-- اختر المخلص المسؤول --</option>
                         {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>{emp.name}</option>
+                          <option key={emp.id} value={emp.id} className="bg-slate-900 text-white font-bold">{emp.name}</option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">نوع البضاعة والوصف</label>
+                      <label className="block text-slate-200 font-bold text-xs mb-1.5">نوع البضاعة والوصف</label>
                       <input
                         type="text"
                         value={goodsType}
                         onChange={(e) => setGoodsType(e.target.value)}
-                        placeholder="مثال: أجهزة كهربائية، حاسبات، مواد كيمياوية..."
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none text-xs"
+                        placeholder="مثال: أجهزة كهربائية، معدات نفطية، مواد غذائية..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 font-semibold text-xs focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* 3. المراحل والتواريخ التشغيلية للشحنة */}
+                {/* 3. المراحل والتواريخ التشغيلية ومحددات الحاوية */}
                 <BillMilestonesEditor
                   deliveryOrderDate={deliveryOrderDate}
                   onDeliveryOrderDateChange={setDeliveryOrderDate}
@@ -777,6 +846,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   onExitDateChange={setExitDate}
                   containerReturnDate={containerReturnDate}
                   onContainerReturnDateChange={setContainerReturnDate}
+                  freeTimeDays={freeTimeDays}
+                  onFreeTimeDaysChange={setFreeTimeDays}
+                  containerDestination={containerDestination}
+                  onContainerDestinationChange={setContainerDestination}
                 />
 
                 {/* Navigation Button */}
@@ -784,27 +857,27 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('financial')}
-                    className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-emerald-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition"
+                    className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-emerald-300 font-bold text-xs flex items-center gap-2 border border-slate-700 transition shadow-xs"
                   >
-                    <span>المتابعة إلى الاتفاق المالي</span>
-                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>المتابعة إلى الإنفاق المالي</span>
+                    <ArrowLeft className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ===================== TAB 2: الاتفاق المالي ===================== */}
+            {/* ===================== TAB 2: الإنفاق المالي ===================== */}
             {activeTab === 'financial' && (
               <div className="space-y-4 animate-in fade-in duration-200 text-xs">
                 {/* Currency Selector Pill Bar */}
-                <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-slate-200 flex items-center gap-1.5">
+                <div className="bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-750 shadow-xs space-y-3.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold pb-2 border-b border-slate-800">
+                    <span className="text-white font-bold text-xs sm:text-sm flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-emerald-400" />
-                      <span>تحديد عملة اتفاق البوليصة مع الزبون:</span>
+                      <span>تحديد عملة الإنفاق للبوليصة مع الزبون:</span>
                     </span>
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                      <span>سعر الصرف (1$ أو 100$):</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-300 font-semibold bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+                      <span>سعر الصرف (1$):</span>
                       <input
                         type="number"
                         min="1"
@@ -817,134 +890,182 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                             onExchangeRateChange(normalizeExchangeRate(num, 1500), true);
                           }
                         }}
-                        className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-emerald-400 font-bold focus:border-emerald-500 focus:outline-none text-center font-mono"
+                        className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-emerald-400 font-black focus:border-emerald-500 focus:outline-none text-center font-mono text-xs"
                       />
-                      <span className="text-slate-500 font-mono">(1$ = {activeRate.toLocaleString('ar-IQ')} د.ع)</span>
+                      <span className="text-slate-400 font-mono">(1$ = {activeRate.toLocaleString('ar-IQ')} د.ع)</span>
                     </div>
                   </div>
 
                   {/* 3 Currency Options */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                     <button
                       type="button"
                       onClick={() => { setIsMixedCurrency(false); setCurrency('IQD'); }}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold transition border flex items-center justify-center gap-1.5 ${
+                      className={`p-3.5 rounded-2xl text-right transition border flex flex-col justify-between gap-2 ${
                         !isMixedCurrency && currency === 'IQD'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-xs ring-1 ring-emerald-500/40'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          ? 'bg-emerald-500/15 border-emerald-500 text-white shadow-md ring-2 ring-emerald-500/40'
+                          : 'bg-slate-950/80 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
                       }`}
                     >
-                      <span>🇮🇶 دينار عراقي فقط (IQD)</span>
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-emerald-300 flex items-center gap-2">
+                          <span>🇮🇶</span>
+                          <span>دينار عراقي فقط (IQD)</span>
+                        </span>
+                        {!isMixedCurrency && currency === 'IQD' && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium">كافة المطالبات والحساب بالدينار العراقي</span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => { setIsMixedCurrency(false); setCurrency('USD'); }}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold transition border flex items-center justify-center gap-1.5 ${
+                      className={`p-3.5 rounded-2xl text-right transition border flex flex-col justify-between gap-2 ${
                         !isMixedCurrency && currency === 'USD'
-                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-xs ring-1 ring-cyan-500/40'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-md ring-2 ring-cyan-500/40'
+                          : 'bg-slate-950/80 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
                       }`}
                     >
-                      <span>🇺🇸 دولار أمريكي فقط ($)</span>
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-cyan-300 flex items-center gap-2">
+                          <span>🇺🇸</span>
+                          <span>دولار أمريكي فقط ($)</span>
+                        </span>
+                        {!isMixedCurrency && currency === 'USD' && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400/50" />
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium">كافة المطالبات والحساب بالدولار الأمريكي</span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => { setIsMixedCurrency(true); setCurrency('IQD'); }}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold transition border flex items-center justify-center gap-1.5 ${
+                      className={`p-3.5 rounded-2xl text-right transition border flex flex-col justify-between gap-2 ${
                         isMixedCurrency
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs ring-1 ring-amber-500/40'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          ? 'bg-amber-500/15 border-amber-500 text-white shadow-md ring-2 ring-amber-500/40'
+                          : 'bg-slate-950/80 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
                       }`}
                     >
-                      <span>🔄 اتفاق مركب (دينار + دولار معاً)</span>
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-amber-300 flex items-center gap-2">
+                          <span>🔄</span>
+                          <span>إنفاق مركب (دينار + دولار معاً)</span>
+                        </span>
+                        {isMixedCurrency && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-400/50" />
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium">تحديد مبالغ بالدينار والدولار لنفس المعاملة</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Single Currency Inputs */}
                 {!isMixedCurrency ? (
-                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                  <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-750 shadow-xs space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                       <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-xs">
-                          المبلغ الكلي للبوليصة ({currency === 'USD' ? 'دولار $' : 'دينار عراقي'}) <span className="text-rose-400">*</span>
+                        <label className="block text-slate-100 font-bold mb-1.5 text-xs sm:text-sm">
+                          المبلغ الكلي المتفق عليه للبوليصة ({currency === 'USD' ? 'دولار أمريكي $' : 'دينار عراقي د.ع'}) <span className="text-rose-400">*</span>
                         </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          required
-                          value={totalAmount === 0 ? '' : totalAmount}
-                          onChange={(e) => setTotalAmount(Number(e.target.value) || 0)}
-                          placeholder="0"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-sm font-bold focus:border-emerald-500 focus:outline-none"
-                        />
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            required
+                            value={totalAmount === 0 ? '' : totalAmount}
+                            onChange={(e) => setTotalAmount(Number(e.target.value) || 0)}
+                            placeholder="0"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 font-mono text-base font-black focus:border-emerald-500 focus:outline-none"
+                          />
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold font-mono text-xs text-slate-400 pointer-events-none">
+                            {currency === 'USD' ? 'USD $' : 'IQD د.ع'}
+                          </span>
+                        </div>
                         {currency === 'USD' && totalAmount > 0 && (
-                          <div className="text-[10px] text-slate-400 font-mono mt-1">
-                            المعادل التقديري: ≈ <strong className="text-emerald-400">{new Intl.NumberFormat('ar-IQ').format(Math.round(totalAmount * activeRate))} د.ع</strong>
+                          <div className="text-xs text-slate-400 font-mono mt-1 font-semibold">
+                            المعادل التقديري بالدينار: ≈ <strong className="text-emerald-400 font-bold">{new Intl.NumberFormat('ar-IQ').format(Math.round(totalAmount * activeRate))} د.ع</strong>
                           </div>
                         )}
                       </div>
 
-                      <div className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between">
-                        <span className="text-slate-400 font-semibold">المتبقي على الزبون:</span>
-                        <span className={`font-mono font-bold text-sm ${remaining === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
+                      {/* Financial KPI Card (Remaining) */}
+                      <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <span className="text-slate-400 font-bold text-xs block">المتبقي الصافي بذمة الزبون:</span>
+                          <span className="text-[11px] text-slate-500 font-medium">بعد خصم الدفعات المسددة</span>
+                        </div>
+                        <span className={`font-mono font-black text-base sm:text-lg ${remaining === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
                           {formatCurrency(remaining, currency)}
                         </span>
                       </div>
                     </div>
 
                     {/* Dual-currency initial payment fields */}
-                    <div className="p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2.5">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                          <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-800/80">
+                        <span className="text-xs font-bold text-white flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-emerald-400" />
                           <span>استلام الدفعة الأولى (المقدم) من الزبون (دينار و/أو دولار معاً):</span>
                         </span>
                         {(initialPaid > 0 || (initialPaidUSD || 0) > 0) && (
-                          <span className="text-[11px] font-mono text-emerald-400 font-bold" dir="ltr">
+                          <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20" dir="ltr">
                             المعادل المخصوم: {formatCurrency(equivalentInitialInBillCurr, currency)}
                           </span>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                          <label className="block text-slate-200 font-bold mb-1.5 text-xs">
                             المقبوض نقداً بالدينار (د.ع)
                           </label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={initialPaid === 0 ? '' : initialPaid}
-                            onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
-                            placeholder="0 د.ع"
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-emerald-400 font-mono text-sm font-bold focus:border-emerald-500 focus:outline-none"
-                          />
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={initialPaid === 0 ? '' : initialPaid}
+                              onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
+                              placeholder="0 د.ع"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-emerald-400 font-mono text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold font-mono text-xs text-slate-500 pointer-events-none">
+                              د.ع
+                            </span>
+                          </div>
                           {currency === 'USD' && initialPaid > 0 && (
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              يعادل: ≈ <strong className="text-emerald-400">${(Math.round((initialPaid / activeRate) * 100) / 100).toLocaleString()}</strong>
+                            <div className="text-xs text-slate-400 font-mono mt-1 font-semibold">
+                              يعادل: ≈ <strong className="text-emerald-400 font-bold">${(Math.round((initialPaid / activeRate) * 100) / 100).toLocaleString()}</strong>
                             </div>
                           )}
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                          <label className="block text-slate-200 font-bold mb-1.5 text-xs">
                             المقبوض نقداً بالدولار ($)
                           </label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={initialPaidUSD === 0 ? '' : initialPaidUSD}
-                            onChange={(e) => setInitialPaidUSD(Number(e.target.value) || 0)}
-                            placeholder="$0"
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-cyan-400 font-mono text-sm font-bold focus:border-cyan-500 focus:outline-none"
-                          />
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={initialPaidUSD === 0 ? '' : initialPaidUSD}
+                              onChange={(e) => setInitialPaidUSD(Number(e.target.value) || 0)}
+                              placeholder="$0"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-cyan-400 font-mono text-sm font-bold focus:border-cyan-500 focus:outline-none"
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold font-mono text-xs text-slate-500 pointer-events-none">
+                              $
+                            </span>
+                          </div>
                           {currency === 'IQD' && (initialPaidUSD || 0) > 0 && (
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              يعادل: ≈ <strong className="text-cyan-400">{new Intl.NumberFormat('ar-IQ').format(Math.round((initialPaidUSD || 0) * activeRate))} د.ع</strong>
+                            <div className="text-xs text-slate-400 font-mono mt-1 font-semibold">
+                              يعادل: ≈ <strong className="text-cyan-400 font-bold">{new Intl.NumberFormat('ar-IQ').format(Math.round((initialPaidUSD || 0) * activeRate))} د.ع</strong>
                             </div>
                           )}
                         </div>
@@ -952,12 +1073,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
                       {/* Live Treasury Reflection Preview */}
                       {(initialPaid > 0 || (initialPaidUSD || 0) > 0) && (
-                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-1">
-                          <span>انعكاس الصندوق اللحظي:</span>
-                          <div className="font-mono font-bold flex items-center gap-2">
-                            {initialPaid > 0 && <span className="text-emerald-400">+{new Intl.NumberFormat('ar-IQ').format(initialPaid)} د.ع (صندوق الدينار)</span>}
+                        <div className="pt-2.5 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 flex-wrap gap-2">
+                          <span className="font-semibold">انعكاس الصندوق اللحظي:</span>
+                          <div className="font-mono font-bold flex items-center gap-2.5">
+                            {initialPaid > 0 && (
+                              <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                +{new Intl.NumberFormat('ar-IQ').format(initialPaid)} د.ع (صندوق الدينار)
+                              </span>
+                            )}
                             {initialPaid > 0 && (initialPaidUSD || 0) > 0 && <span className="text-slate-600">|</span>}
-                            {(initialPaidUSD || 0) > 0 && <span className="text-cyan-400">+${(initialPaidUSD || 0).toLocaleString()} (صندوق الدولار)</span>}
+                            {(initialPaidUSD || 0) > 0 && (
+                              <span className="text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                                +${(initialPaidUSD || 0).toLocaleString()} (صندوق الدولار)
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -965,31 +1094,32 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   </div>
                 ) : (
                   /* Mixed Currency Section (د.ع + $) */
-                  <div className="space-y-3 p-4 bg-slate-950/70 rounded-2xl border border-amber-500/30">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <div className="space-y-4 p-4 sm:p-5 bg-slate-900 rounded-2xl border border-amber-500/30 shadow-xs">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-800 flex-wrap gap-2">
+                      <span className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-2">
                         <Coins className="w-4 h-4 text-amber-400" />
-                        <span>تحديد اتفاق البوليصة بالعملتين مع الزبون (دينار + دولار معاً):</span>
+                        <span>تحديد إنفاق البوليصة بالعملتين مع الزبون (دينار + دولار معاً):</span>
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-xs text-slate-400 font-mono font-bold bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
                         سعر الصرف: 1$ = {activeRate.toLocaleString('ar-IQ')} د.ع
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Part 1: IQD Agreement */}
-                      <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                            <span>🇮🇶 اتفاق الدينار العراقي (د.ع)</span>
+                      <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                          <span className="text-xs sm:text-sm font-black text-emerald-400 flex items-center gap-1.5">
+                            <span>🇮🇶</span>
+                            <span>إنفاق الدينار العراقي (د.ع)</span>
                           </span>
-                          <span className="text-[10px] text-slate-400">
-                            المتبقي: <strong className={`font-mono ${remaining === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">{formatCurrency(remaining, 'IQD')}</strong>
+                          <span className="text-xs text-slate-300">
+                            المتبقي: <strong className={`font-mono font-bold ${remaining === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">{formatCurrency(remaining, 'IQD')}</strong>
                           </span>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2.5">
                           <div>
-                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                            <label className="block text-slate-200 text-xs font-bold mb-1">
                               المبلغ الكلي بالدينار (د.ع) <span className="text-rose-400">*</span>
                             </label>
                             <input
@@ -999,11 +1129,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                               value={totalAmount === 0 ? '' : totalAmount}
                               onChange={(e) => setTotalAmount(Number(e.target.value) || 0)}
                               placeholder="مثال: 1,000 د.ع أو 5,000,000 د.ع"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:border-emerald-500 focus:outline-none"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white font-mono font-black focus:border-emerald-500 focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                            <label className="block text-slate-200 text-xs font-bold mb-1">
                               المقدم المقبوض بالدينار (د.ع)
                             </label>
                             <input
@@ -1013,25 +1143,26 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                               value={initialPaid === 0 ? '' : initialPaid}
                               onChange={(e) => setInitialPaid(Number(e.target.value) || 0)}
                               placeholder="0 د.ع"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:border-emerald-500 focus:outline-none"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-emerald-400 font-mono font-black focus:border-emerald-500 focus:outline-none"
                             />
                           </div>
                         </div>
                       </div>
 
                       {/* Part 2: USD Agreement */}
-                      <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-cyan-400 flex items-center gap-1">
-                            <span>🇺🇸 اتفاق الدولار الأمريكي ($)</span>
+                      <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                          <span className="text-xs sm:text-sm font-black text-cyan-400 flex items-center gap-1.5">
+                            <span>🇺🇸</span>
+                            <span>إنفاق الدولار الأمريكي ($)</span>
                           </span>
-                          <span className="text-[10px] text-slate-400">
-                            المتبقي: <strong className={`font-mono ${remainingUSD === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">{formatCurrency(remainingUSD, 'USD')}</strong>
+                          <span className="text-xs text-slate-300">
+                            المتبقي: <strong className={`font-mono font-bold ${remainingUSD === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">{formatCurrency(remainingUSD, 'USD')}</strong>
                           </span>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2.5">
                           <div>
-                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                            <label className="block text-slate-200 text-xs font-bold mb-1">
                               المبلغ الكلي بالدولار ($) <span className="text-rose-400">*</span>
                             </label>
                             <input
@@ -1041,11 +1172,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                               value={totalAmountUSD === 0 ? '' : totalAmountUSD}
                               onChange={(e) => setTotalAmountUSD(Number(e.target.value) || 0)}
                               placeholder="مثال: $500 أو $2,000"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:border-cyan-500 focus:outline-none"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white font-mono font-black focus:border-cyan-500 focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-slate-300 text-[10px] font-semibold mb-1">
+                            <label className="block text-slate-200 text-xs font-bold mb-1">
                               المقدم المقبوض بالدولار ($)
                             </label>
                             <input
@@ -1055,7 +1186,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                               value={initialPaidUSD === 0 ? '' : initialPaidUSD}
                               onChange={(e) => setInitialPaidUSD(Number(e.target.value) || 0)}
                               placeholder="$0"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-cyan-400 font-mono font-bold focus:border-cyan-500 focus:outline-none"
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-cyan-400 font-mono font-black focus:border-cyan-500 focus:outline-none"
                             />
                           </div>
                         </div>
@@ -1063,32 +1194,40 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </div>
 
                     {/* Mixed Contract Live Summary Box */}
-                    <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-[11px]">
+                    <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400 font-semibold">المبلغ الإجمالي المتفق عليه:</span>
-                        <span className="font-mono font-bold text-white text-xs" dir="ltr">
+                        <span className="text-slate-300 font-bold">المبلغ الإجمالي المتفق عليه:</span>
+                        <span className="font-mono font-black text-white text-sm" dir="ltr">
                           {formatCurrency(totalAmount || 0, 'IQD')} + {formatCurrency(totalAmountUSD || 0, 'USD')}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                        <span>المعادل التقديري الإجمالي:</span>
+                      <div className="flex items-center justify-between text-slate-400 text-xs">
+                        <span>المعادل التقديري الإجمالي بالدينار:</span>
                         <span className="font-mono text-emerald-400 font-bold" dir="ltr">
                           ≈ {new Intl.NumberFormat('ar-IQ').format((totalAmount || 0) + ((totalAmountUSD || 0) * activeRate))} د.ع
                         </span>
                       </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-800">
-                        <span className="text-slate-400 font-semibold">المتبقي الصافي بذمة الزبون:</span>
-                        <span className="font-mono font-bold text-amber-400 text-xs" dir="ltr">
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                        <span className="text-slate-300 font-bold">المتبقي الصافي بذمة الزبون:</span>
+                        <span className="font-mono font-black text-amber-400 text-sm" dir="ltr">
                           {formatCurrency(remaining, 'IQD')} + {formatCurrency(remainingUSD, 'USD')}
                         </span>
                       </div>
                       {(initialPaid > 0 || (initialPaidUSD || 0) > 0) && (
-                        <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px] text-slate-400">
-                          <span>انعكاس الصندوق اللحظي:</span>
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs text-slate-300">
+                          <span className="font-semibold">انعكاس الصندوق اللحظي:</span>
                           <div className="font-mono font-bold flex items-center gap-2">
-                            {initialPaid > 0 && <span className="text-emerald-400">+{new Intl.NumberFormat('ar-IQ').format(initialPaid)} د.ع (صندوق الدينار)</span>}
+                            {initialPaid > 0 && (
+                              <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                +{new Intl.NumberFormat('ar-IQ').format(initialPaid)} د.ع (صندوق الدينار)
+                              </span>
+                            )}
                             {initialPaid > 0 && (initialPaidUSD || 0) > 0 && <span className="text-slate-600">|</span>}
-                            {(initialPaidUSD || 0) > 0 && <span className="text-cyan-400">+${(initialPaidUSD || 0).toLocaleString()} (صندوق الدولار)</span>}
+                            {(initialPaidUSD || 0) > 0 && (
+                              <span className="text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                                +${(initialPaidUSD || 0).toLocaleString()} (صندوق الدولار)
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1097,18 +1236,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 )}
 
                 {/* Direct Operational Expenses on Bill (رسوم كمركية، موانئ، فحص، عمال، نثريات) */}
-                <div className="p-4 bg-slate-950/70 rounded-2xl border border-purple-500/30 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-purple-400 font-bold text-sm">💸</span>
+                <div className="p-4 sm:p-5 bg-slate-900 rounded-2xl border border-purple-500/30 shadow-xs space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2 border-b border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold shrink-0">
+                        💸
+                      </div>
                       <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-2">
+                        <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
                           <span>المصاريف الكمركية والتشغيلية المخصومة من الصندوق</span>
-                          <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-mono">
-                            {directExpensesOnBill.length} سند
+                          <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-mono font-bold">
+                            {directExpensesOnBill.length} سند صرف
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-xs text-slate-400 mt-0.5">
                           رسوم كمرك، عوائد موانئ، سونار، فحص، عمال، أو نثريات تُصرف وتخصم من صندوق الدينار أو الدولار
                         </p>
                       </div>
@@ -1118,7 +1259,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <button
                         type="button"
                         onClick={() => onOpenAddExpense(initialData)}
-                        className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-xs"
                       >
                         <span>+ صرف مصروف جديد 💸</span>
                       </button>
@@ -1126,29 +1267,33 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   </div>
 
                   {directExpensesOnBill.length > 0 ? (
-                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span className="text-slate-400">إجمالي المصاريف المصروفة من الصندوق:</span>
-                        <div className="font-mono font-bold text-purple-300 flex items-center gap-2" dir="ltr">
+                        <span className="text-slate-300 font-bold">إجمالي المصاريف المصروفة من الصندوق:</span>
+                        <div className="font-mono font-black text-purple-300 text-sm flex items-center gap-2" dir="ltr">
                           {directExpensesIQDOnBill > 0 && (
-                            <span className="text-purple-300">{formatCurrency(directExpensesIQDOnBill, 'IQD')}</span>
+                            <span className="text-purple-300 bg-purple-500/10 px-2.5 py-0.5 rounded border border-purple-500/20">
+                              {formatCurrency(directExpensesIQDOnBill, 'IQD')}
+                            </span>
                           )}
-                          {directExpensesIQDOnBill > 0 && directExpensesUSDOnBill > 0 && <span className="text-slate-600">+</span>}
+                          {directExpensesIQDOnBill > 0 && directExpensesUSDOnBill > 0 && <span className="text-slate-500">+</span>}
                           {directExpensesUSDOnBill > 0 && (
-                            <span className="text-cyan-400">{formatCurrency(directExpensesUSDOnBill, 'USD')}</span>
+                            <span className="text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded border border-cyan-500/20">
+                              {formatCurrency(directExpensesUSDOnBill, 'USD')}
+                            </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-800/80">
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/80">
                         {directExpensesOnBill.map(exp => (
                           <div
                             key={exp.id}
-                            className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[10px] flex items-center gap-1.5"
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs flex items-center gap-2 font-bold"
                           >
-                            <span className="font-mono text-purple-400 font-bold">{exp.voucherNo}</span>
-                            <span className="text-slate-300">{exp.category}</span>
-                            <span className="font-mono font-bold text-rose-400" dir="ltr">
+                            <span className="font-mono text-purple-400 font-black">{exp.voucherNo}</span>
+                            <span className="text-slate-200">{exp.category}</span>
+                            <span className="font-mono font-black text-rose-400" dir="ltr">
                               -{formatCurrency(exp.amount, exp.currency || 'IQD')}
                             </span>
                           </div>
@@ -1156,9 +1301,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-500 p-2.5 bg-slate-900/40 rounded-xl border border-slate-800/60">
+                    <div className="text-xs text-slate-400 p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 font-medium leading-relaxed">
                       {initialData ? (
-                        <span>لا توجد مصاريف كمركية مصروفة على هذه البوليصة بعد. يمكنك تسجيل وصرف أي رسوم أو نثريات عبر زر "صرف مصروف جديد".</span>
+                        <span>لا توجد مصاريف كمركية مصروفة على هذه البوليصة بعد. يمكنك تسجيل وصرف أي رسوم أو نثريات عبر زر "+ صرف مصروف جديد 💸" أعلاه.</span>
                       ) : (
                         <span>فور حفظ البوليصة، يمكنك إضافة وصرف أي مصاريف كمركية وموانئ ونثريات بالدينار أو بالدولار مع خصمها آلياً من الصندوق.</span>
                       )}
@@ -1171,18 +1316,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('general')}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-xs flex items-center gap-1.5 transition"
+                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold text-xs flex items-center gap-2 transition cursor-pointer"
                   >
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-4 h-4" />
                     <span>العودة إلى البيانات</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('transport')}
-                    className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-cyan-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition"
+                    className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-cyan-300 font-bold text-xs flex items-center gap-2 border border-slate-700 transition cursor-pointer"
                   >
                     <span>المتابعة إلى الحاويات والنقل</span>
-                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <ArrowLeft className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1191,6 +1336,40 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {/* ===================== TAB 3: الحاويات والنقل ===================== */}
             {activeTab === 'transport' && (
               <div className="space-y-4 animate-in fade-in duration-200 text-xs">
+                {/* ملخص محددات الحاوية وفترة السماح (Free Time & Destination) */}
+                <div className="p-4 bg-slate-900 rounded-2xl border border-slate-750 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold shrink-0 text-base">
+                      📦
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-sm text-white">محددات الحاوية والوجهة اللوجستية</span>
+                        {jobNumber && (
+                          <span className="px-2.5 py-0.5 rounded-lg font-mono text-xs bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-black">
+                            Job: {jobNumber}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-300 flex items-center gap-2 mt-1 flex-wrap">
+                        <span>الوجهة: <strong className="text-white font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">{containerDestination || 'غير محددة'}</strong></span>
+                        <span className="text-slate-600">•</span>
+                        <span>فترة السماح (Free Time): <strong className="text-amber-300 font-mono font-black bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">{freeTimeDays ? `${freeTimeDays} يوم` : 'غير محددة'}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('general')}
+                      className="px-3.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white text-xs font-bold border border-slate-700 transition cursor-pointer"
+                    >
+                      تعديل الوجهة وفترة السماح ✎
+                    </button>
+                  </div>
+                </div>
+
                 {/* 1. محرر الحاويات */}
                 <ContainersEditor
                   containers={containers}
@@ -1199,15 +1378,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
                 {/* 2. Notice if transport is cleared while payments exist */}
                 {hasPaidCarriersOnBill && (!hasTransport || transportTrips.length === 0) && (
-                  <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-xs flex items-start gap-3 animate-in fade-in">
+                  <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-xs flex items-start gap-3 animate-in fade-in">
                     <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                     <div className="space-y-1">
                       <div className="font-bold text-amber-300 text-sm">
                         تنبيه محاسبي: انعكاس استرداد أجور النقل إلى الصندوق
                       </div>
-                      <div className="text-slate-300 leading-relaxed text-[11px]">
+                      <div className="text-slate-300 leading-relaxed text-xs">
                         تم مسح / إلغاء نقلات وشاحنات هذه البوليصة، وتوجد دفعات أجور نقل مسددة للنواقل سابقاً من الصندوق بقيمة{' '}
-                        <strong className="text-emerald-400 font-mono">
+                        <strong className="text-emerald-400 font-mono font-bold">
                           {carrierPaidIQDOnBill > 0 ? formatCurrency(carrierPaidIQDOnBill, 'IQD') : ''}
                           {carrierPaidUSDOnBill > 0 ? `${carrierPaidIQDOnBill > 0 ? ' + ' : ''}${formatCurrency(carrierPaidUSDOnBill, 'USD')}` : ''}
                         </strong>.
@@ -1238,18 +1417,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('financial')}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-xs flex items-center gap-1.5 transition"
+                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold text-xs flex items-center gap-2 transition cursor-pointer"
                   >
-                    <ArrowRight className="w-3.5 h-3.5" />
-                    <span>العودة إلى الاتفاق المالي</span>
+                    <ArrowRight className="w-4 h-4" />
+                    <span>العودة إلى الإنفاق المالي</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('notes')}
-                    className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-purple-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition"
+                    className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-purple-300 font-bold text-xs flex items-center gap-2 border border-slate-700 transition cursor-pointer"
                   >
                     <span>المتابعة إلى الوكالة والملاحظات</span>
-                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <ArrowLeft className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1278,14 +1457,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('transport')}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-xs flex items-center gap-1.5 transition"
+                    className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold text-xs flex items-center gap-2 transition cursor-pointer"
                   >
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-4 h-4" />
                     <span>العودة إلى الحاويات والنقل</span>
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition"
+                    className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition cursor-pointer"
                   >
                     <span>💾 حفظ بيانات البوليصة</span>
                   </button>
@@ -1305,11 +1484,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           />
 
           {/* Footer - Always Visible at the Bottom with Real-time Financial Counters */}
-          <div className="px-5 py-3 bg-slate-950/95 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 z-10">
-            <div className="flex items-center gap-4 text-xs text-slate-400 flex-wrap">
-              <span className="flex items-center gap-1">
-                <span className="text-slate-500">الإجمالي:</span>
-                <span className="font-mono font-bold text-slate-200">
+          <div className="px-5 py-3.5 bg-slate-950/95 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 z-10 shadow-lg">
+            <div className="flex items-center gap-3 sm:gap-4 text-xs text-slate-400 flex-wrap">
+              <span className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400 font-bold">الإجمالي:</span>
+                <span className="font-mono font-black text-white text-xs sm:text-sm">
                   {isMixedCurrency
                     ? `${new Intl.NumberFormat('ar-IQ').format(totalAmount || 0)} د.ع + $${totalAmountUSD || 0}`
                     : currency === 'USD'
@@ -1317,10 +1496,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     : `${new Intl.NumberFormat('ar-IQ').format(totalAmount || 0)} د.ع`}
                 </span>
               </span>
-              <span className="hidden sm:inline text-slate-700">•</span>
-              <span className="hidden sm:flex items-center gap-1">
-                <span className="text-slate-500">المقدم:</span>
-                <span className="font-mono font-bold text-emerald-400">
+              <span className="hidden sm:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400 font-bold">المقدم:</span>
+                <span className="font-mono font-black text-emerald-400 text-xs sm:text-sm">
                   {isMixedCurrency || ((initialPaid || 0) > 0 && (initialPaidUSD || 0) > 0)
                     ? `${new Intl.NumberFormat('ar-IQ').format(initialPaid || 0)} د.ع + $${(initialPaidUSD || 0).toLocaleString()}`
                     : (initialPaidUSD || 0) > 0
@@ -1328,15 +1506,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     : `${new Intl.NumberFormat('ar-IQ').format(initialPaid || 0)} د.ع`}
                 </span>
               </span>
-              <span className="hidden sm:inline text-slate-700">•</span>
-              <span className="hidden sm:flex items-center gap-1">
-                <span className="text-slate-500">الحاويات:</span>
-                <span className="font-mono font-bold text-cyan-400">{containers.length}</span>
+              <span className="hidden md:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400 font-bold">الحاويات:</span>
+                <span className="font-mono font-black text-cyan-300 text-xs sm:text-sm">{containers.length}</span>
               </span>
-              <span className="hidden sm:inline text-slate-700">•</span>
-              <span className="hidden sm:flex items-center gap-1">
-                <span className="text-slate-500">المراحل:</span>
-                <span className="font-mono font-bold text-purple-400">{milestonesCount}/4</span>
+              <span className="hidden md:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400 font-bold">المراحل:</span>
+                <span className="font-mono font-black text-purple-300 text-xs sm:text-sm">{milestonesCount}/4</span>
               </span>
             </div>
 
@@ -1344,7 +1520,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={() => footerAgencyInputRef.current?.click()}
-                className={`px-3.5 py-1.5 font-bold rounded-xl transition text-xs flex items-center gap-1.5 border ${
+                className={`px-3.5 py-2 font-bold rounded-xl transition text-xs flex items-center gap-1.5 border cursor-pointer ${
                   agencyDocument
                     ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40'
                     : 'bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/40'
@@ -1352,14 +1528,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 title="رفع وأرشفة ورقة الوكالة الخاصة بالعمل لهذه البوليصة"
               >
                 <Paperclip className="w-3.5 h-3.5" />
-                <span>{agencyDocument ? '✓ تم أرشفة الوكالة' : 'أرشفة الوكالة'}</span>
+                <span>{agencyDocument ? '✓ أُرشفت الوكالة' : 'أرشفة الوكالة'}</span>
               </button>
 
               {initialData && onDelete && (
                 <button
                   type="button"
                   onClick={() => onDelete(initialData)}
-                  className="px-3.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 font-bold rounded-xl transition text-xs flex items-center gap-1.5"
+                  className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 font-bold rounded-xl transition text-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>حذف البوليصة</span>
@@ -1368,21 +1544,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold rounded-xl transition text-xs"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold rounded-xl transition text-xs cursor-pointer"
               >
                 إلغاء
               </button>
               <button
                 type="submit"
                 disabled={isInitialExceeded || isTotalLessThanExisting}
-                className={`px-5 py-1.5 font-bold rounded-xl transition text-xs flex items-center gap-1.5 ${
+                className={`px-6 py-2 font-black rounded-xl transition text-xs sm:text-sm flex items-center gap-2 cursor-pointer ${
                   isInitialExceeded || isTotalLessThanExisting
                     ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-lg shadow-emerald-500/20'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/30'
                 }`}
               >
                 <span>💾</span>
-                <span>{initialData ? 'حفظ التعديلات' : 'حفظ البوليصة'}</span>
+                <span>{initialData ? 'حفظ التعديلات' : 'حفظ بيانات البوليصة'}</span>
               </button>
             </div>
           </div>
