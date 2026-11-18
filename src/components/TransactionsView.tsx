@@ -211,18 +211,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       {/* الصف الأول (Row 1): هوية البوليصة، الزبون، الحسابات المالية، وأزرار الإجراءات */}
                       <tr className="bg-slate-900 hover:bg-slate-850/80 transition-colors border-b border-slate-800/80">
                         {/* Col 1: رقم البوليصة + شارة الشركة + محفز البوب أوفر التفاعلي لعرض كافة معلومات ومراحل البوليصة */}
-                        <td className="pt-3.5 pb-2 px-4 align-top relative">
-                          <Popover>
-                            {/* نقطة ارتكاز البوب أوفر لمحاذاة المستطيل المنبثق تماماً مع الحافة اليمنى للجدول */}
-                            <PopoverAnchor className="absolute top-2 right-1.5 w-1 h-8 pointer-events-none" />
+                        <td className="pt-3.5 pb-2 px-4 align-top">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* شارة الشركة التابعة */}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
+                              {comp.shortName}
+                            </span>
 
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {/* شارة الشركة التابعة */}
-                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
-                                {comp.shortName}
-                              </span>
-
-                              {/* محفز البوب أوفر التفاعلي - رقم البوليصة فقط بدون أي نصوص إضافية */}
+                            {/* محفز البوب أوفر التفاعلي - رقم البوليصة فقط بدون أي نصوص إضافية */}
+                            <Popover>
                               <PopoverTrigger asChild>
                                 <button
                                   type="button"
@@ -235,21 +232,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                 </button>
                               </PopoverTrigger>
 
-                              {/* شارة رقم المعاملة الداخلي (Job No) */}
-                              {tx.jobNumber && (
-                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold shrink-0" title={`رقم المعاملة الداخلي: ${tx.jobNumber}`}>
-                                  Job: {tx.jobNumber}
-                                </span>
-                              )}
-                            </div>
-
-                            <PopoverContent
-                              align="start"
-                              side="bottom"
-                              sideOffset={8}
-                              className="w-[95vw] md:w-[920px] lg:w-[1020px] xl:w-[1080px] max-w-[96vw] p-3 sm:p-3.5 bg-slate-900 border border-slate-750 shadow-2xl rounded-2xl text-xs space-y-2.5 z-50 animate-in fade-in zoom-in-95 max-h-[85vh] overflow-y-auto"
-                              dir="rtl"
-                            >
+                              <PopoverContent
+                                align="start"
+                                alignOffset={-16}
+                                side="bottom"
+                                sideOffset={8}
+                                className="w-[95vw] md:w-[860px] lg:w-[910px] xl:w-[920px] max-w-[95vw] p-3 sm:p-3.5 bg-slate-900 border border-slate-750 shadow-2xl rounded-2xl text-xs space-y-2.5 z-50 animate-in fade-in zoom-in-95 max-h-[85vh] overflow-y-auto"
+                                dir="rtl"
+                              >
                                 {/* 1. رأس بطاقة البوب أوفر الأفقي: الشركة + رقم البوليصة + Job No + الحالة التشغيلية */}
                                 <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
                                   <div className="flex items-center gap-2">
@@ -489,7 +479,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                 </div>
                               </PopoverContent>
                             </Popover>
-                          </td>
+
+                            {/* شارة رقم المعاملة الداخلي (Job No) */}
+                            {tx.jobNumber && (
+                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold shrink-0" title={`رقم المعاملة الداخلي: ${tx.jobNumber}`}>
+                                Job: {tx.jobNumber}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
                         {/* Col 2: الزبون (الشركة) */}
                         <td className="pt-3.5 pb-1.5 px-4 align-top">
