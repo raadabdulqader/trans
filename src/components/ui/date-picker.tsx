@@ -13,6 +13,7 @@ export interface DatePickerProps {
   minDate?: string;
   maxDate?: string;
   required?: boolean;
+  size?: 'default' | 'sm';
 }
 
 /**
@@ -28,9 +29,11 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   minDate,
   maxDate,
   required = false,
+  size = 'default',
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const isSm = size === 'sm';
 
   // Close on outside click
   React.useEffect(() => {
@@ -71,7 +74,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-950 border rounded-xl text-xs font-medium transition text-right ${
+        className={`w-full flex items-center justify-between gap-1.5 ${
+          isSm ? "h-8 px-2.5 py-1 rounded-lg text-xs" : "px-3 py-2 rounded-xl text-xs"
+        } bg-slate-950 border font-medium transition text-right ${
           disabled
             ? "border-slate-800 text-slate-500 cursor-not-allowed bg-slate-900/50"
             : isOpen
@@ -79,19 +84,19 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             : "border-slate-700 hover:border-slate-600 text-slate-200"
         }`}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <CalendarIcon className={`w-4 h-4 shrink-0 ${value ? "text-emerald-400" : "text-slate-400"}`} />
+        <div className="flex items-center gap-1.5 min-w-0">
+          <CalendarIcon className={`${isSm ? "w-3.5 h-3.5" : "w-4 h-4"} shrink-0 ${value ? "text-emerald-400" : "text-slate-400"}`} />
           {value ? (
-            <div className="flex items-center gap-2 truncate">
-              <span className="text-slate-100 font-semibold truncate">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className={`text-slate-100 font-semibold truncate ${isSm ? "text-[11px]" : ""}`}>
                 {formatArabicDate(value)}
               </span>
-              <span className="font-mono text-[10px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+              <span className={`font-mono text-[10px] text-slate-400 bg-slate-900 px-1 py-0.5 rounded border border-slate-800 ${isSm ? "hidden sm:inline-block" : ""}`}>
                 {value}
               </span>
             </div>
           ) : (
-            <span className="text-slate-500 truncate">{placeholder}</span>
+            <span className={`text-slate-500 truncate ${isSm ? "text-[11px]" : ""}`}>{placeholder}</span>
           )}
         </div>
 

@@ -4,6 +4,7 @@ import { Transaction, Employee, Currency } from '../../types/customs';
 import { formatCurrency, normalizeExchangeRate } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
 import { CommissionSection } from '../ui/CommissionSection';
+import { CurrencySelect } from '../ui/currency-select';
 
 export interface CommissionPayload {
   hasCommission: boolean;
@@ -124,35 +125,18 @@ export const QuickAdvanceModal: React.FC<QuickAdvanceModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* Column 1: Currency, Broker, Date */}
             <div className="space-y-3 bg-slate-950/40 p-3.5 rounded-2xl border border-slate-800/80">
-              {/* Currency Selector */}
-              <div className="p-2 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-                <span className="text-slate-300 font-semibold text-[11px] flex items-center gap-1 shrink-0">
+              {/* Currency Selector via Shadcn Select with RTL */}
+              <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                <span className="text-slate-300 font-semibold text-[11px] flex items-center gap-1.5 shrink-0">
                   <DollarSign className="w-3.5 h-3.5 text-amber-400" />
                   <span>عملة السلفة:</span>
                 </span>
-                <div className="grid grid-cols-2 gap-1.5 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => handleCurrencyChange('IQD')}
-                    className={`py-1 px-2 rounded-lg font-bold transition border text-[11px] ${
-                      currency === 'IQD'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                    }`}
-                  >
-                    🇮🇶 دينار (IQD)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCurrencyChange('USD')}
-                    className={`py-1 px-2 rounded-lg font-bold transition border text-[11px] ${
-                      currency === 'USD'
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                    }`}
-                  >
-                    🇺🇸 دولار ($)
-                  </button>
+                <div className="flex-1 max-w-[200px]">
+                  <CurrencySelect
+                    value={currency}
+                    onValueChange={handleCurrencyChange}
+                    size="sm"
+                  />
                 </div>
               </div>
 

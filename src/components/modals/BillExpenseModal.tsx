@@ -30,6 +30,7 @@ import {
 } from '../../types/customs';
 import { formatCurrency } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
+import { CurrencySelect } from '../ui/currency-select';
 
 export interface BillExpenseCategory {
   id: string;
@@ -264,42 +265,21 @@ export const BillExpenseModal: React.FC<BillExpenseModalProps> = ({
         {/* Form Body */}
         <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
 
-          {/* Currency Toggle Card (IQD vs USD) */}
-          <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
-            <label className="block text-slate-300 font-bold text-xs flex items-center justify-between">
-              <span>عملة الصرف (تحدد الصندوق المخصوم منه):</span>
+          {/* Currency Selection via Shadcn Select with RTL */}
+          <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-slate-300 font-bold text-xs">
+                عملة الصرف (تحدد الصندوق المخصوم منه):
+              </label>
               <span className="text-[11px] font-mono text-slate-400 font-normal">
                 سعر الصرف: 1$ = {exchangeRate.toLocaleString('ar-IQ')} د.ع
               </span>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrency('IQD')}
-                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition border flex items-center justify-center gap-2 ${
-                  currency === 'IQD'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/40'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                }`}
-              >
-                <span>🇮🇶</span>
-                <span>دينار عراقي (IQD)</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">صندوق الدينار</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrency('USD')}
-                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition border flex items-center justify-center gap-2 ${
-                  currency === 'USD'
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-md ring-1 ring-cyan-500/40'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                }`}
-              >
-                <span>💵</span>
-                <span>دولار أمريكي (USD)</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono">صندوق الدولار</span>
-              </button>
             </div>
+            <CurrencySelect
+              value={currency}
+              onValueChange={setCurrency}
+              showSubText
+            />
           </div>
 
           {/* Quick Expense Preset Chips */}

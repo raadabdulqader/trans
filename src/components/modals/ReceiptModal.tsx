@@ -4,6 +4,7 @@ import { Receipt, Transaction, Customer, Employee, COMPANIES, Currency } from '.
 import { getBillFinancials, getReceiptBreakdownForBill, formatCurrency, normalizeExchangeRate } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
 import { CommissionSection } from '../ui/CommissionSection';
+import { CurrencySelect } from '../ui/currency-select';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -298,35 +299,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   <span className="text-[10px] text-slate-500">القسم الأول</span>
                 </div>
 
-                {/* Currency Toggle */}
-                <div className="p-2 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
-                  <span className="text-slate-300 font-semibold text-[11px] flex items-center gap-1 shrink-0">
+                {/* Currency Selection via Shadcn Select with RTL */}
+                <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                  <span className="text-slate-300 font-semibold text-[11px] flex items-center gap-1.5 shrink-0">
                     <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
                     <span>عملة السند:</span>
                   </span>
-                  <div className="grid grid-cols-2 gap-1.5 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => handleCurrencySwitch('IQD')}
-                      className={`py-1 px-2.5 rounded-lg font-bold transition border text-[11px] ${
-                        currency === 'IQD'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-xs'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                      }`}
-                    >
-                      🇮🇶 دينار (IQD)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCurrencySwitch('USD')}
-                      className={`py-1 px-2.5 rounded-lg font-bold transition border text-[11px] ${
-                        currency === 'USD'
-                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-xs'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                      }`}
-                    >
-                      🇺🇸 دولار ($)
-                    </button>
+                  <div className="flex-1 max-w-[220px]">
+                    <CurrencySelect
+                      value={currency}
+                      onValueChange={handleCurrencySwitch}
+                      size="sm"
+                    />
                   </div>
                 </div>
 

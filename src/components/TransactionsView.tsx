@@ -26,7 +26,7 @@ import { Transaction, Customer, Employee, Receipt, AppUser, CompanyId, COMPANIES
 import { formatCurrency, getBillFinancials } from '../utils/storage';
 import { Badge } from './ui/badge';
 import { CUSTOMS_PRESET_NOTES } from '../utils/customsNotes';
-import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
+import { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from './ui/popover';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
@@ -211,15 +211,18 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       {/* الصف الأول (Row 1): هوية البوليصة، الزبون، الحسابات المالية، وأزرار الإجراءات */}
                       <tr className="bg-slate-900 hover:bg-slate-850/80 transition-colors border-b border-slate-800/80">
                         {/* Col 1: رقم البوليصة + شارة الشركة + محفز البوب أوفر التفاعلي لعرض كافة معلومات ومراحل البوليصة */}
-                        <td className="pt-3.5 pb-2 px-4 align-top">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {/* شارة الشركة التابعة */}
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
-                              {comp.shortName}
-                            </span>
+                        <td className="pt-3.5 pb-2 px-4 align-top relative">
+                          <Popover>
+                            {/* نقطة ارتكاز البوب أوفر لمحاذاة المستطيل المنبثق تماماً مع الحافة اليمنى للجدول */}
+                            <PopoverAnchor className="absolute top-2 right-1.5 w-1 h-8 pointer-events-none" />
 
-                            {/* محفز البوب أوفر التفاعلي - رقم البوليصة فقط بدون أي نصوص إضافية */}
-                            <Popover>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* شارة الشركة التابعة */}
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
+                                {comp.shortName}
+                              </span>
+
+                              {/* محفز البوب أوفر التفاعلي - رقم البوليصة فقط بدون أي نصوص إضافية */}
                               <PopoverTrigger asChild>
                                 <button
                                   type="button"
@@ -232,15 +235,23 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                 </button>
                               </PopoverTrigger>
 
-                              <PopoverContent
-                                align="start"
-                                side="bottom"
-                                sideOffset={8}
-                                className="w-[780px] sm:w-[840px] max-w-[95vw] p-4 sm:p-5 bg-slate-900 border border-slate-750 shadow-2xl rounded-2xl text-xs space-y-3.5 z-50 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto"
-                                dir="rtl"
-                              >
+                              {/* شارة رقم المعاملة الداخلي (Job No) */}
+                              {tx.jobNumber && (
+                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold shrink-0" title={`رقم المعاملة الداخلي: ${tx.jobNumber}`}>
+                                  Job: {tx.jobNumber}
+                                </span>
+                              )}
+                            </div>
+
+                            <PopoverContent
+                              align="start"
+                              side="bottom"
+                              sideOffset={8}
+                              className="w-[95vw] md:w-[920px] lg:w-[1020px] xl:w-[1080px] max-w-[96vw] p-3 sm:p-3.5 bg-slate-900 border border-slate-750 shadow-2xl rounded-2xl text-xs space-y-2.5 z-50 animate-in fade-in zoom-in-95 max-h-[85vh] overflow-y-auto"
+                              dir="rtl"
+                            >
                                 {/* 1. رأس بطاقة البوب أوفر الأفقي: الشركة + رقم البوليصة + Job No + الحالة التشغيلية */}
-                                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800 flex-wrap gap-2">
+                                <div className="flex items-center justify-between pb-2 border-b border-slate-800 flex-wrap gap-2">
                                   <div className="flex items-center gap-2">
                                     <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border shrink-0 ${comp.badgeColor}`}>
                                       {comp.shortName}
@@ -284,18 +295,18 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                   </div>
                                 </div>
 
-                                {/* 2. الجسم الرئيسي للبوب أوفر - شبكة أفقية بعمودين متوازيين */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
-                                  {/* العمود الأيمن: هوية البضاعة والمواعيد والمراحل التشغيلية الأربعة */}
-                                  <div className="space-y-3">
+                                {/* 2. الجسم الرئيسي للبوب أوفر - شبكة أفقية ثلاثية الأعمدة لتوزيع متوازن ومضغوط عمودياً */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 items-stretch">
+                                  {/* العمود الأيمن (العمود 1): هوية البضاعة، التواريخ، المخلص المسؤول والحاويات */}
+                                  <div className="space-y-2 flex flex-col justify-between">
                                     {/* بطاقة نوع البضاعة والتواريخ */}
-                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
                                       <div className="flex items-center justify-between text-xs">
                                         <span className="text-slate-400 font-bold flex items-center gap-1.5 text-[11px]">
                                           <span>📦</span>
                                           <span>نوع البضاعة والوصف:</span>
                                         </span>
-                                        <span className="font-bold text-white bg-slate-900 px-2.5 py-0.5 rounded border border-slate-800 text-xs">
+                                        <span className="font-bold text-white bg-slate-900 px-2 py-0.5 rounded border border-slate-800 text-xs truncate max-w-[170px]" title={tx.goodsType || 'بضاعة عامة'}>
                                           {tx.goodsType || 'بضاعة عامة'}
                                         </span>
                                       </div>
@@ -312,100 +323,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                       </div>
                                     </div>
 
-                                    {/* بطاقة المراحل والتواريخ التشغيلية الأربعة وفترة السماح */}
-                                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                                      <div className="text-[11px] text-slate-300 font-bold flex items-center justify-between">
-                                        <span className="flex items-center gap-1 text-slate-200">
-                                          <span>⏱️</span>
-                                          <span>المراحل والتواريخ التشغيلية:</span>
-                                        </span>
-                                        {tx.freeTimeDays && (
-                                          <span className="font-mono text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
-                                            ⏳ فترة السماح: {tx.freeTimeDays} يوم
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.deliveryOrderDate ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
-                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
-                                            <span>📄</span>
-                                            <span>أمر التسليم:</span>
-                                          </span>
-                                          <span className="font-bold text-slate-200">{tx.deliveryOrderDate || 'غير محدد'}</span>
-                                        </div>
-
-                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.clearanceDate ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
-                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
-                                            <span>🏛️</span>
-                                            <span>التخليص الكمركي:</span>
-                                          </span>
-                                          <span className="font-bold text-slate-200">{tx.clearanceDate || 'غير محدد'}</span>
-                                        </div>
-
-                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.exitDate ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
-                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
-                                            <span>🚛</span>
-                                            <span>خروج الشحنة:</span>
-                                          </span>
-                                          <span className="font-bold text-slate-200">{tx.exitDate || 'غير محدد'}</span>
-                                        </div>
-
-                                        <div className={`p-2 rounded-xl border flex flex-col gap-0.5 ${tx.containerReturnDate ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
-                                          <span className="text-[10px] font-sans font-bold flex items-center gap-1">
-                                            <span>🔄</span>
-                                            <span>إعادة الحاوية:</span>
-                                          </span>
-                                          <span className="font-bold text-slate-200">{tx.containerReturnDate || 'غير محدد'}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* العمود الأيسر: أجور النقل البري + الحاويات + المخلص + الوكالة والملاحظات */}
-                                  <div className="space-y-3">
-                                    {/* بطاقة أجور النقل البري والنواقل (المنقولة من الجدول لتصبح بارزة هنا) */}
-                                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-amber-300 font-black text-xs flex items-center gap-1.5">
-                                          <Truck className="w-4 h-4 text-amber-400" />
-                                          <span>أجور نقل البضائع والشاحنات (أجور النواقل):</span>
-                                        </span>
-                                        <span className="font-mono font-black text-sm text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-lg border border-amber-500/40" dir="ltr">
-                                          {(fin.totalCarrierCost || 0) > 0 ? formatCurrency(fin.totalCarrierCost || 0, tx.currency || 'IQD') : '0 (لا توجد أجور نقل)'}
-                                        </span>
-                                      </div>
-
-                                      {tx.transportTrips && tx.transportTrips.length > 0 ? (
-                                        <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1.5 border-t border-amber-500/20">
-                                          <span>عدد الشاحنات: <strong className="text-white font-mono">{tx.transportTrips.reduce((s, t) => s + (Number(t.truckCount) || 1), 0)} شاحنة</strong> ({tx.transportTrips.length} نقلة)</span>
-                                          {(tx.transportDocument || tx.transportTrips?.some(t => t.transportDocument)) && onViewArchive && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                const doc = tx.transportDocument || tx.transportTrips?.find(t => t.transportDocument)?.transportDocument;
-                                                if (doc) onViewArchive(doc, `وصل استلام النقل - بوليصة ${tx.billNo}`);
-                                              }}
-                                              className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-md font-bold text-[10px] transition cursor-pointer"
-                                            >
-                                              <Eye className="w-3 h-3" />
-                                              <span>معاينة وصل النقل</span>
-                                            </button>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="text-[10px] text-slate-400">لا توجد نقلات أو شاحنات برية مسجلة لهذه البوليصة.</div>
-                                      )}
-                                    </div>
-
                                     {/* بطاقة المخلص والحاويات والوجهة */}
-                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs">
                                       <div className="flex items-center justify-between">
                                         <span className="text-slate-400 font-bold flex items-center gap-1.5 text-[11px]">
                                           <HardHat className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                           <span>المخلص المسؤول:</span>
                                         </span>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1.5">
                                           <span className="font-bold text-white">{emp?.name || 'غير محدد'}</span>
                                           {emp?.phone && <span className="text-[10px] text-slate-400 font-mono" dir="ltr">({emp.phone})</span>}
                                         </div>
@@ -437,10 +362,96 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                         )}
                                       </div>
                                     </div>
+                                  </div>
+
+                                  {/* العمود الأوسط (العمود 2): المراحل والتواريخ التشغيلية الأربعة وفترة السماح */}
+                                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 flex flex-col justify-between">
+                                    <div className="text-[11px] text-slate-300 font-bold flex items-center justify-between">
+                                      <span className="flex items-center gap-1 text-slate-200">
+                                        <span>⏱️</span>
+                                        <span>المراحل والتواريخ التشغيلية:</span>
+                                      </span>
+                                      {tx.freeTimeDays && (
+                                        <span className="font-mono text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-bold">
+                                          ⏳ فترة السماح: {tx.freeTimeDays} يوم
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+                                      <div className={`p-1.5 rounded-lg border flex flex-col gap-0.5 ${tx.deliveryOrderDate ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                        <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                          <span>📄</span>
+                                          <span>أمر التسليم:</span>
+                                        </span>
+                                        <span className="font-bold text-slate-200">{tx.deliveryOrderDate || 'غير محدد'}</span>
+                                      </div>
+
+                                      <div className={`p-1.5 rounded-lg border flex flex-col gap-0.5 ${tx.clearanceDate ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                        <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                          <span>🏛️</span>
+                                          <span>التخليص الكمركي:</span>
+                                        </span>
+                                        <span className="font-bold text-slate-200">{tx.clearanceDate || 'غير محدد'}</span>
+                                      </div>
+
+                                      <div className={`p-1.5 rounded-lg border flex flex-col gap-0.5 ${tx.exitDate ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                        <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                          <span>🚛</span>
+                                          <span>خروج الشحنة:</span>
+                                        </span>
+                                        <span className="font-bold text-slate-200">{tx.exitDate || 'غير محدد'}</span>
+                                      </div>
+
+                                      <div className={`p-1.5 rounded-lg border flex flex-col gap-0.5 ${tx.containerReturnDate ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' : 'bg-slate-950/60 border-slate-800 text-slate-500'}`}>
+                                        <span className="text-[10px] font-sans font-bold flex items-center gap-1">
+                                          <span>🔄</span>
+                                          <span>إعادة الحاوية:</span>
+                                        </span>
+                                        <span className="font-bold text-slate-200">{tx.containerReturnDate || 'غير محدد'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* العمود الأيسر (العمود 3): أجور النقل والشاحنات + الملاحظات والوكالة */}
+                                  <div className="space-y-2 flex flex-col justify-between">
+                                    {/* بطاقة أجور النقل البري والنواقل */}
+                                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-amber-300 font-black text-xs flex items-center gap-1.5">
+                                          <Truck className="w-4 h-4 text-amber-400" />
+                                          <span>أجور نقل البضائع والشاحنات:</span>
+                                        </span>
+                                        <span className="font-mono font-black text-xs sm:text-sm text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-lg border border-amber-500/40" dir="ltr">
+                                          {(fin.totalCarrierCost || 0) > 0 ? formatCurrency(fin.totalCarrierCost || 0, tx.currency || 'IQD') : '0 (لا توجد أجور نقل)'}
+                                        </span>
+                                      </div>
+
+                                      {tx.transportTrips && tx.transportTrips.length > 0 ? (
+                                        <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1.5 border-t border-amber-500/20">
+                                          <span>عدد الشاحنات: <strong className="text-white font-mono">{tx.transportTrips.reduce((s, t) => s + (Number(t.truckCount) || 1), 0)} شاحنة</strong> ({tx.transportTrips.length} نقلة)</span>
+                                          {(tx.transportDocument || tx.transportTrips?.some(t => t.transportDocument)) && onViewArchive && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const doc = tx.transportDocument || tx.transportTrips?.find(t => t.transportDocument)?.transportDocument;
+                                                if (doc) onViewArchive(doc, `وصل استلام النقل - بوليصة ${tx.billNo}`);
+                                              }}
+                                              className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 px-2 py-0.5 rounded-md font-bold text-[10px] transition cursor-pointer"
+                                            >
+                                              <Eye className="w-3 h-3" />
+                                              <span>معاينة وصل النقل</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[10px] text-slate-400">لا توجد نقلات أو شاحنات برية مسجلة لهذه البوليصة.</div>
+                                      )}
+                                    </div>
 
                                     {/* بطاقة الملاحظات والوكالة */}
-                                    {(tx.notes || tx.agencyDocument || tx.cancelReason) && (
-                                      <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1.5 text-[11px]">
+                                    {(tx.notes || tx.agencyDocument || tx.cancelReason) ? (
+                                      <div className="p-2 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1.5 text-[11px]">
                                         {tx.status === 'cancelled' && tx.cancelReason && (
                                           <div className="text-rose-400 font-bold">
                                             ⚠️ سبب الإلغاء: {tx.cancelReason}
@@ -468,52 +479,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                           </div>
                                         )}
                                       </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* 3. شريط الإجراءات السفلي داخل البوب أوفر */}
-                                <div className="flex items-center justify-between pt-2.5 border-t border-slate-800 flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenTransactionDetail(tx)}
-                                    className="text-xs text-emerald-400 hover:text-emerald-300 font-bold hover:underline flex items-center gap-1.5 transition cursor-pointer"
-                                  >
-                                    <span>عرض تفاصيل المعاملة بالكامل</span>
-                                    <span>↗</span>
-                                  </button>
-
-                                  <div className="flex items-center gap-2.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleRowExpand(tx.id)}
-                                      className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold hover:underline transition cursor-pointer"
-                                    >
-                                      {expandedRowIds.has(tx.id) ? 'طي الصف في الجدول ▴' : 'توسيع الصف في الجدول ▾'}
-                                    </button>
-                                    {(currentUser.role === 'admin' || currentUser.permissions.editTx) && (
-                                      <button
-                                        type="button"
-                                        onClick={() => onEditTransaction(tx)}
-                                        className="text-[11px] text-slate-200 hover:text-white font-semibold flex items-center gap-1.5 transition cursor-pointer bg-slate-800 hover:bg-slate-750 px-3 py-1 rounded-lg border border-slate-700"
-                                      >
-                                        <Edit2 className="w-3 h-3" />
-                                        <span>تعديل البوليصة</span>
-                                      </button>
+                                    ) : (
+                                      <div className="p-2 rounded-xl bg-slate-950/40 border border-slate-800/50 text-[10px] text-slate-500 flex items-center gap-1.5">
+                                        <span>💬</span>
+                                        <span>لا توجد ملاحظات أو توجيهات مسجلة</span>
+                                      </div>
                                     )}
                                   </div>
                                 </div>
                               </PopoverContent>
                             </Popover>
-
-                            {/* شارة رقم المعاملة الداخلي (Job No) */}
-                            {tx.jobNumber && (
-                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold shrink-0" title={`رقم المعاملة الداخلي: ${tx.jobNumber}`}>
-                                Job: {tx.jobNumber}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                          </td>
 
                         {/* Col 2: الزبون (الشركة) */}
                         <td className="pt-3.5 pb-1.5 px-4 align-top">

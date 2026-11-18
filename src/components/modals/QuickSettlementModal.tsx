@@ -3,6 +3,7 @@ import { X, CheckCheck } from 'lucide-react';
 import { Transaction, Employee, Receipt, Currency } from '../../types/customs';
 import { formatCurrency } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
+import { CurrencySelect } from '../ui/currency-select';
 
 export interface QuickSettlementModalProps {
   isOpen: boolean;
@@ -94,29 +95,16 @@ export const QuickSettlementModal: React.FC<QuickSettlementModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-            <button
-              type="button"
-              onClick={() => { setCurrency('IQD'); setAmount(openIQD); }}
-              className={`py-1 rounded-lg font-bold text-[11px] transition border ${
-                currency === 'IQD'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-slate-900 text-slate-400 border-slate-800'
-              }`}
-            >
-              🇮🇶 دينار (IQD)
-            </button>
-            <button
-              type="button"
-              onClick={() => { setCurrency('USD'); setAmount(openUSD); }}
-              className={`py-1 rounded-lg font-bold text-[11px] transition border ${
-                currency === 'USD'
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                  : 'bg-slate-900 text-slate-400 border-slate-800'
-              }`}
-            >
-              🇺🇸 دولار ($)
-            </button>
+          <div className="space-y-1">
+            <label className="block text-slate-300 font-semibold text-[11px]">عملة التسوية</label>
+            <CurrencySelect
+              value={currency}
+              onValueChange={(newCurr) => {
+                setCurrency(newCurr);
+                setAmount(newCurr === 'USD' ? openUSD : openIQD);
+              }}
+              size="sm"
+            />
           </div>
 
           <div>

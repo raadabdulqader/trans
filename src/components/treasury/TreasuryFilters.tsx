@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { AppUser, CompanyId } from '../../types/customs';
 import { DatePicker } from '../ui/date-picker';
+import { CurrencyFilterSelect } from '../ui/currency-select';
 
 export interface TreasuryFiltersProps {
   currentUser: AppUser;
@@ -178,18 +179,14 @@ export const TreasuryFilters: React.FC<TreasuryFiltersProps> = ({
             </select>
           </div>
 
-          {/* Currency filter */}
+          {/* Currency filter via Shadcn Select with RTL */}
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-slate-400">العملة:</span>
-            <select
+            <CurrencyFilterSelect
               value={currencyFilter}
-              onChange={(e) => setCurrencyFilter(e.target.value as any)}
-              className="bg-slate-950 border border-slate-700/80 rounded-xl px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-semibold"
-            >
-              <option value="all">💵 كافة العملات (د.ع + $)</option>
-              <option value="IQD">🇮🇶 دينار عراقي (IQD)</option>
-              <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
-            </select>
+              onValueChange={setCurrencyFilter}
+              triggerClassName="h-8 min-w-[170px]"
+            />
           </div>
 
           {/* Date range filters with Shadcn DatePicker */}

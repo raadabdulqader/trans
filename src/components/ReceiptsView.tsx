@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Plus, Receipt as ReceiptIcon, Trash2, Printer, Filter, Ban, Info, ShieldAlert, CheckCircle2, DollarSign, Coins } from 'lucide-react';
 import { Receipt, Transaction, Customer, Employee, AppUser, CompanyId, COMPANIES, Currency } from '../types/customs';
 import { formatCurrency } from '../utils/storage';
+import { CurrencyFilterSelect } from './ui/currency-select';
 
 interface ReceiptsViewProps {
   receipts: Receipt[];
@@ -257,16 +258,12 @@ export const ReceiptsView: React.FC<ReceiptsViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Currency Filter */}
-            <select
+            {/* Currency Filter via Shadcn Select with RTL */}
+            <CurrencyFilterSelect
               value={currencyFilter}
-              onChange={(e) => setCurrencyFilter(e.target.value as any)}
-              className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition font-semibold"
-            >
-              <option value="all">💵 كافة العملات</option>
-              <option value="IQD">🇮🇶 دينار عراقي (IQD)</option>
-              <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
-            </select>
+              onValueChange={setCurrencyFilter}
+              triggerClassName="h-9 min-w-[170px]"
+            />
 
             <select
               value={companyFilter}

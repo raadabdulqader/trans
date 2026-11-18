@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Building, User, DollarSign, Coins } from 'lucide-react';
 import { Currency } from '../../types/customs';
 import { formatCurrency } from '../../utils/storage';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
 interface CommissionSectionProps {
   hasCommission: boolean;
@@ -120,32 +121,25 @@ export const CommissionSection: React.FC<CommissionSectionProps> = ({
             </div>
           </div>
 
-          {/* 3. Currency Selector (USD / IQD) */}
-          <div className="grid grid-cols-2 gap-1 p-0.5 bg-slate-900 rounded-lg border border-slate-800 shrink-0">
-            <button
-              type="button"
-              onClick={() => onCurrencyChange('USD')}
-              className={`py-1 px-2 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-0.5 ${
-                commissionCurrency === 'USD'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+          {/* 3. Currency Selector (USD / IQD) via Shadcn Select with RTL */}
+          <div className="w-[115px] shrink-0">
+            <Select
+              value={commissionCurrency}
+              onValueChange={(val) => onCurrencyChange(val as Currency)}
+              dir="rtl"
             >
-              <DollarSign className="w-2.5 h-2.5" />
-              <span>دولار</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onCurrencyChange('IQD')}
-              className={`py-1 px-2 rounded-md text-[10px] font-bold transition flex items-center justify-center gap-0.5 ${
-                commissionCurrency === 'IQD'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Coins className="w-2.5 h-2.5" />
-              <span>د.ع</span>
-            </button>
+              <SelectTrigger className="h-8 text-[11px] px-2 py-0.5 font-bold bg-slate-900 border-slate-800">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent dir="rtl" className="min-w-[130px]">
+                <SelectItem value="IQD">
+                  <span className="font-bold text-emerald-400">🇮🇶 دينار (IQD)</span>
+                </SelectItem>
+                <SelectItem value="USD">
+                  <span className="font-bold text-cyan-400">🇺🇸 دولار ($)</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 4. Bearer Selector (Company vs Party) */}

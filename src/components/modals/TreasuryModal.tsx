@@ -24,6 +24,7 @@ import { TreasuryTransaction, TreasuryMovementType, TreasuryAttachment, AppUser,
 import { normalizeExchangeRate, formatCurrency } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
 import { CommissionSection } from '../ui/CommissionSection';
+import { CurrencySelect } from '../ui/currency-select';
 
 interface TreasuryModalProps {
   isOpen: boolean;
@@ -315,32 +316,12 @@ export const TreasuryModal: React.FC<TreasuryModalProps> = ({
                 </button>
               </div>
 
-              {/* Currency Switch */}
-              <div className="md:col-span-3 grid grid-cols-2 gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleCurrencyChange('IQD')}
-                  className={`py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition ${
-                    currency === 'IQD'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Coins className="w-3 h-3 text-emerald-400" />
-                  <span>دينار (IQD)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCurrencyChange('USD')}
-                  className={`py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition ${
-                    currency === 'USD'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <DollarSign className="w-3 h-3 text-cyan-400" />
-                  <span>دولار ($)</span>
-                </button>
+              {/* Currency Selection via Shadcn Select with RTL */}
+              <div className="md:col-span-3">
+                <CurrencySelect
+                  value={currency}
+                  onValueChange={handleCurrencyChange}
+                />
               </div>
 
               {/* Target Entity / Company Box */}

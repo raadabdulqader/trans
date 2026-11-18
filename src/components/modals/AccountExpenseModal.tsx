@@ -17,6 +17,7 @@ import {
 import { TreasuryTransaction, TreasuryAttachment, Employee, AppUser, CompanyId, COMPANIES, Currency } from '../../types/customs';
 import { formatCurrency } from '../../utils/storage';
 import { DatePicker } from '../ui/date-picker';
+import { CurrencySelect } from '../ui/currency-select';
 
 export type SubAccountType = 'salaries' | 'daily' | 'rents';
 
@@ -348,33 +349,16 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
 
               {/* Currency Selection + Amount */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1.5 gap-2">
                   <label className="block text-slate-300 font-semibold text-[11px]">
                     العملة والمبلغ المصروف من الصندوق <span className="text-rose-400">*</span>
                   </label>
-                  <div className="inline-flex rounded-lg bg-slate-900 p-0.5 border border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setCurrency('IQD')}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
-                        currency === 'IQD'
-                          ? 'bg-emerald-500 text-slate-950'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      🇮🇶 دينار (د.ع)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrency('USD')}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
-                        currency === 'USD'
-                          ? 'bg-cyan-500 text-slate-950'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      🇺🇸 دولار ($)
-                    </button>
+                  <div className="w-[180px]">
+                    <CurrencySelect
+                      value={currency}
+                      onValueChange={setCurrency}
+                      size="xs"
+                    />
                   </div>
                 </div>
                 <div className="relative">
