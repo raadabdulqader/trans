@@ -1,25 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  X, 
-  Upload, 
-  Paperclip, 
-  Trash2, 
-  CheckCircle2, 
-  Coins, 
-  Users, 
-  Building2, 
-  Coffee, 
-  Calendar,
-  FileText,
-  DollarSign,
-  Printer
-} from 'lucide-react';
-import { TreasuryTransaction, TreasuryAttachment, Employee, AppUser, CompanyId, COMPANIES, Currency } from '../../types/customs';
-import { formatCurrency } from '../../utils/storage';
-import { DatePicker } from '../ui/date-picker';
-import { CurrencySelect } from '../ui/currency-select';
+import { X, Trash2, Printer } from 'lucide-react';
+import { TreasuryTransaction, TreasuryAttachment, Employee, AppUser, CompanyId, Currency } from '../../types/customs';
+import { SubAccountType, SALARY_TYPES, DAILY_CATEGORIES, RENT_TYPES } from '../accounts/modal/AccountExpensePresets';
+import { AccountExpenseCategoryPills } from '../accounts/modal/AccountExpenseCategoryPills';
+import { AccountExpenseFinancialForm } from '../accounts/modal/AccountExpenseFinancialForm';
+import { AccountExpenseClassificationForm } from '../accounts/modal/AccountExpenseClassificationForm';
 
-export type SubAccountType = 'salaries' | 'daily' | 'rents';
+export type { SubAccountType };
+export { SALARY_TYPES, DAILY_CATEGORIES, RENT_TYPES };
 
 interface AccountExpenseModalProps {
   isOpen: boolean;
@@ -57,37 +45,6 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
   const [description, setDescription] = useState('');
   const [attachment, setAttachment] = useState<TreasuryAttachment | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Salaries Presets
-  const salaryTypes = [
-    'راتب شهري أساسي',
-    'مكافأة تشجيعية / حافز إنجاز',
-    'أجور ساعات إضافية',
-    'بدل نقل ومواصلات',
-    'مستحقات نهاية خدمة / تسوية',
-  ];
-
-  // Daily Expenses Presets
-  const dailyCategories = [
-    'ضيافة وبوفيه ومأكولات',
-    'وقود وزيوت ونقل داخلي',
-    'قرطاسية ومطبوعات ومستلزمات مكتب',
-    'صيانة مكاتب ونظافة ومياه',
-    'اشتراكات إنترنت وهاتف واتصالات',
-    'رسوم طوابع وتصاديق ومعاملات يومية',
-    'نثريات ومصاريف طارئة',
-    'أخرى (مصروف يومي)',
-  ];
-
-  // Rents Presets
-  const rentTypes = [
-    'إيجار المقر الرئيسي / المكتب',
-    'إيجار مستودع ومخزن بضائع',
-    'إيجار ساحة الحاويات والميناء',
-    'إيجار كراج سيارات وشاحنات',
-    'رسوم مرافق وخدمات عقارية',
-    'أخرى (إيجار عقار)',
-  ];
 
   useEffect(() => {
     if (initialData) {
@@ -127,18 +84,18 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
       if (defaultSubAccount === 'salaries') {
         const targetEmp = initialEmployee || employees[0];
         setAmount(targetEmp?.baseSalary && targetEmp.baseSalary > 0 ? targetEmp.baseSalary : 1000000);
-        setExpenseSubCategory(salaryTypes[0]);
+        setExpenseSubCategory(SALARY_TYPES[0]);
         setPartyName(targetEmp?.name || '');
         setSelectedEmpId(targetEmp?.id || '');
         setDescription(`صرف راتب شهر ${currentMonth} للموظف ${targetEmp?.name || ''}`);
       } else if (defaultSubAccount === 'rents') {
         setAmount(1500000);
-        setExpenseSubCategory(rentTypes[0]);
+        setExpenseSubCategory(RENT_TYPES[0]);
         setPartyName('مالك العقار');
         setDescription(`دفعة إيجار عن ${currentMonth}`);
       } else {
         setAmount(75000);
-        setExpenseSubCategory(dailyCategories[0]);
+        setExpenseSubCategory(DAILY_CATEGORIES[0]);
         setPartyName('نثريات المكتب');
         setDescription('مصاريف يومية ونثرية نقدية');
       }
@@ -154,18 +111,18 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
 
     if (type === 'salaries') {
       const targetEmp = initialEmployee || employees[0];
-      setExpenseSubCategory(salaryTypes[0]);
+      setExpenseSubCategory(SALARY_TYPES[0]);
       setPartyName(targetEmp?.name || '');
       setSelectedEmpId(targetEmp?.id || '');
       setDescription(`صرف راتب شهر ${currentMonth} للموظف ${targetEmp?.name || ''}`);
       if (!initialData) setAmount(targetEmp?.baseSalary && targetEmp.baseSalary > 0 ? targetEmp.baseSalary : 1000000);
     } else if (type === 'rents') {
-      setExpenseSubCategory(rentTypes[0]);
+      setExpenseSubCategory(RENT_TYPES[0]);
       setPartyName('مالك العقار');
       setDescription(`دفعة إيجار عن ${currentMonth}`);
       if (!initialData) setAmount(1500000);
     } else {
-      setExpenseSubCategory(dailyCategories[0]);
+      setExpenseSubCategory(DAILY_CATEGORIES[0]);
       setPartyName('نثريات المكتب');
       setDescription('مصاريف يومية ونثرية نقدية');
       if (!initialData) setAmount(75000);
@@ -209,7 +166,6 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
   const executeSave = (andPrint: boolean = true) => {
     if (!amount || amount <= 0 || !partyName) return;
 
-    // Build clear category description
     let fullCategory = '';
     if (subAccount === 'salaries') {
       fullCategory = `رواتب: ${expenseSubCategory}`;
@@ -223,7 +179,7 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
       id: initialData?.id,
       voucherNo,
       companyId,
-      type: 'withdrawal', // Automatically recorded as withdrawal from company treasury
+      type: 'withdrawal',
       category: fullCategory,
       amount: Number(amount) || 0,
       currency,
@@ -276,306 +232,44 @@ export const AccountExpenseModal: React.FC<AccountExpenseModalProps> = ({
         </div>
 
         {/* Sub-account Selector Pills */}
-        <div className="px-6 pt-4 pb-2 border-b border-slate-800/80 bg-slate-950/30 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => handleSubAccountChange('salaries')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              subAccount === 'salaries'
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>رواتب وأجور الكادر</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSubAccountChange('daily')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              subAccount === 'daily'
-                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            <Coffee className="w-4 h-4" />
-            <span>مصاريف يومية ونثرية</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSubAccountChange('rents')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              subAccount === 'rents'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>إيجارات ومرافق</span>
-          </button>
-        </div>
+        <AccountExpenseCategoryPills
+          subAccount={subAccount}
+          onChange={handleSubAccountChange}
+        />
 
         {/* Form Body - 2 Columns */}
         <form onSubmit={handleSubmit}>
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-            
-            {/* Column 1: Financial & Party info */}
-            <div className="space-y-3.5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-xs font-bold text-slate-300">
-                <span className="flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-emerald-400" />
-                  المبلغ والجهة المستفيدة
-                </span>
-                <span className="text-[10px] text-slate-500">حركة صرف نقدية</span>
-              </div>
+            <AccountExpenseFinancialForm
+              companyId={companyId}
+              setCompanyId={setCompanyId}
+              currency={currency}
+              setCurrency={setCurrency}
+              amount={amount}
+              setAmount={setAmount}
+              date={date}
+              setDate={setDate}
+              period={period}
+              setPeriod={setPeriod}
+              subAccount={subAccount}
+              employees={employees}
+              selectedEmpId={selectedEmpId}
+              onEmployeeSelect={handleEmployeeSelect}
+              partyName={partyName}
+              setPartyName={setPartyName}
+            />
 
-              {/* Company Selection */}
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
-                  الشركة التابع لها المصروف / القيد
-                </label>
-                <select
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value as any)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-medium focus:border-emerald-500 focus:outline-none"
-                >
-                  <option value="shared">🏛️ مصاريف مشتركة (صندوق الشركة الموحد)</option>
-                  <option value="naqaa_basra">🏢 شركة نقاء البصرة للتخليص الكمركي</option>
-                  <option value="sawt_aljanoub">🏢 شركة صوت الجنوب للتخليص الكمركي</option>
-                </select>
-              </div>
-
-              {/* Currency Selection + Amount */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5 gap-2">
-                  <label className="block text-slate-300 font-semibold text-[11px]">
-                    العملة والمبلغ المصروف من الصندوق <span className="text-rose-400">*</span>
-                  </label>
-                  <div className="w-[180px]">
-                    <CurrencySelect
-                      value={currency}
-                      onValueChange={setCurrency}
-                      size="xs"
-                    />
-                  </div>
-                </div>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    required
-                    value={amount === 0 ? '' : amount}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setAmount(val === '' ? 0 : Number(val));
-                    }}
-                    placeholder={currency === 'USD' ? 'أدخل المبلغ بالدولار ($)' : 'أدخل المبلغ بالدينار العراقي'}
-                    className={`w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 font-mono text-base font-bold focus:outline-none ${
-                      currency === 'USD' ? 'text-cyan-400 focus:border-cyan-500' : 'text-rose-400 focus:border-rose-500'
-                    }`}
-                  />
-                  <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-bold">
-                    {currency === 'USD' ? 'USD ($)' : 'د.ع'}
-                  </span>
-                </div>
-
-                {/* Quick Preset Buttons */}
-                <div className="flex flex-wrap gap-1.5 pt-2">
-                  {(currency === 'USD'
-                    ? [50, 100, 250, 500, 1000, 2000]
-                    : [25000, 50000, 100000, 250000, 500000, 1000000]
-                  ).map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setAmount(preset)}
-                      className={`px-2 py-0.5 rounded-lg border text-[10px] font-mono font-bold transition ${
-                        amount === preset
-                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
-                    >
-                      {formatCurrency(preset, currency)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date & Period */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1 text-[11px]">تاريخ الصرف</label>
-                  <DatePicker
-                    value={date}
-                    onChange={(d) => setDate(d)}
-                    placeholder="اختر تاريخ الصرف..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1 text-[11px]">عن شهر / فترة</label>
-                  <input
-                    type="text"
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                    placeholder="مثال: تشرين الأول 2026"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Specific Party Selection */}
-              {subAccount === 'salaries' ? (
-                <div className="space-y-2">
-                  <label className="block text-slate-300 font-semibold text-[11px]">
-                    الموظف / المستفيد <span className="text-rose-400">*</span>
-                  </label>
-                  <select
-                    value={selectedEmpId}
-                    onChange={(e) => handleEmployeeSelect(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="">-- اختر من قائمة الموظفين والمخلصين --</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name} {emp.jobTitle ? `• [${emp.jobTitle}]` : ''} {emp.baseSalary ? `(${new Intl.NumberFormat('ar-IQ').format(emp.baseSalary)} د.ع)` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    required
-                    value={partyName}
-                    onChange={(e) => setPartyName(e.target.value)}
-                    placeholder="أو اكتب اسم الموظف يدوياً إذا لم يكن بالقائمة"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-              ) : subAccount === 'rents' ? (
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
-                    اسم المؤجر / العقار <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={partyName}
-                    onChange={(e) => setPartyName(e.target.value)}
-                    placeholder="مثال: شركة العقارات المتحدة / صاحب الملك"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-cyan-500 focus:outline-none"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
-                    الجهة المستلمة للمصروف <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={partyName}
-                    onChange={(e) => setPartyName(e.target.value)}
-                    placeholder="مثال: كافتيريا، محطة وقود، مكتبة..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-amber-500 focus:outline-none"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Column 2: Classification, Notes & Receipt Archiving */}
-            <div className="space-y-3.5 bg-slate-950/40 p-4 rounded-2xl border border-slate-800">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-xs font-bold text-slate-300">
-                <span className="flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-cyan-400" />
-                  تصنيف البند والأرشيف
-                </span>
-                <span className="text-[10px] text-slate-500">أرشفة الوصل</span>
-              </div>
-
-              {/* Sub-category selector */}
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
-                  نوع البند التفصيلي <span className="text-rose-400">*</span>
-                </label>
-                <select
-                  value={expenseSubCategory}
-                  onChange={(e) => setExpenseSubCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
-                >
-                  {subAccount === 'salaries' && salaryTypes.map((st, i) => (
-                    <option key={i} value={st}>{st}</option>
-                  ))}
-                  {subAccount === 'daily' && dailyCategories.map((dc, i) => (
-                    <option key={i} value={dc}>{dc}</option>
-                  ))}
-                  {subAccount === 'rents' && rentTypes.map((rt, i) => (
-                    <option key={i} value={rt}>{rt}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Notes / Description */}
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1 text-[11px]">البيان / الوصف</label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="ملاحظات تفصيلية حول عملية الصرف..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none resize-none"
-                />
-              </div>
-
-              {/* Attachment / Receipt Archiving */}
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1 text-[11px] flex items-center justify-between">
-                  <span>أرشفة وصل أو فاتورة الصرف</span>
-                  <span className="text-[10px] text-slate-500">صور أو مستندات أو PDF</span>
-                </label>
-
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                />
-
-                {attachment ? (
-                  <div className="p-3 bg-slate-900 border border-emerald-500/30 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <Paperclip className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <div className="truncate">
-                        <div className="text-xs text-white font-medium truncate">{attachment.name}</div>
-                        <div className="text-[10px] text-emerald-400 font-mono">
-                          {(attachment.size / 1024).toFixed(1)} KB • مؤرشف وجاهز للمعاينة
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAttachment(undefined)}
-                      className="text-rose-400 hover:text-rose-300 p-1"
-                      title="حذف الملف"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full py-2.5 px-3 border border-dashed border-slate-700 hover:border-emerald-500 rounded-xl bg-slate-950/50 hover:bg-slate-950 text-slate-400 hover:text-slate-200 text-xs transition flex items-center justify-center gap-2"
-                  >
-                    <Upload className="w-4 h-4 text-emerald-400" />
-                    <span>رفع وأرشفة وصل الدفع أو الفاتورة</span>
-                  </button>
-                )}
-              </div>
-            </div>
+            <AccountExpenseClassificationForm
+              subAccount={subAccount}
+              expenseSubCategory={expenseSubCategory}
+              setExpenseSubCategory={setExpenseSubCategory}
+              description={description}
+              setDescription={setDescription}
+              attachment={attachment}
+              setAttachment={setAttachment}
+              fileInputRef={fileInputRef}
+              onFileChange={handleFileChange}
+            />
           </div>
 
           {/* Footer */}

@@ -79,6 +79,7 @@ import { VoidBillFinancialModal, VoidResolutionMode } from './components/modals/
 import { CalendarViewModal } from './components/modals/CalendarViewModal';
 import { ExchangeRateModal } from './components/modals/ExchangeRateModal';
 import { LoginPage } from './components/auth/LoginPage';
+import { PanelRightOpen } from 'lucide-react';
 
 // Treasury states
 
@@ -87,6 +88,33 @@ export default function App() {
   const [isLoggedOut, setIsLoggedOut] = useState(false);
   const [activePage, setActivePage] = useState<string>('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<'expanded' | 'collapsed' | 'hidden'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('customs_sidebar_mode');
+      if (saved === 'collapsed' || saved === 'hidden' || saved === 'expanded') {
+        return saved;
+      }
+      if (localStorage.getItem('customs_sidebar_collapsed') === 'true') {
+        return 'collapsed';
+      }
+    }
+    return 'expanded';
+  });
+
+  const handleSetSidebarMode = (mode: 'expanded' | 'collapsed' | 'hidden') => {
+    setSidebarMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('customs_sidebar_mode', mode);
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    if (sidebarMode === 'expanded') {
+      handleSetSidebarMode('collapsed');
+    } else {
+      handleSetSidebarMode('expanded');
+    }
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCustomerId, setFilterCustomerId] = useState<string | undefined>(undefined);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -2396,6 +2424,19 @@ export default function App() {
         </div>
       )}
 
+      {/* Floating Restore Button when Sidebar is Completely Hidden */}
+      {sidebarMode === 'hidden' && (
+        <button
+          type="button"
+          onClick={() => handleSetSidebarMode('expanded')}
+          className="fixed top-20 right-0 z-40 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2 px-3 rounded-l-xl shadow-xl shadow-emerald-950/50 flex items-center gap-1.5 text-xs transition-all hover:pr-4 cursor-pointer animate-in slide-in-from-right-4"
+          title="إرجاع الشريط الجانبي (التبويبات)"
+        >
+          <PanelRightOpen className="w-4 h-4" />
+          <span>إرجاع التبويبات</span>
+        </button>
+      )}
+
       {/* Main Sidebar */}
       <Sidebar
         activePage={activePage}
@@ -2407,6 +2448,8 @@ export default function App() {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         onOpenCalendar={() => setIsCalendarOpen(true)}
+        sidebarMode={sidebarMode}
+        setSidebarMode={handleSetSidebarMode}
       />
 
       {/* Content Area */}
@@ -2420,6 +2463,8 @@ export default function App() {
           currentUser={data.currentUser}
           pendingCount={pendingNotificationCount}
           exchangeRate={data.exchangeRate || 1500}
+          sidebarMode={sidebarMode}
+          onToggleSidebar={handleToggleSidebar}
           onOpenExchangeRate={() => setIsExchangeRateModalOpen(true)}
           onOpenSwitchUser={() => setIsSwitchUserOpen(true)}
           onExportBackup={() => exportBackup(data)}

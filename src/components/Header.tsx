@@ -1,6 +1,19 @@
 'use client';
 
-import { Menu, Search, Download, Upload, Bell, ChevronDown, RotateCcw, Calendar as CalendarIcon, DollarSign, LogOut } from 'lucide-react';
+import { 
+  Menu, 
+  Search, 
+  Download, 
+  Upload, 
+  Bell, 
+  ChevronDown, 
+  RotateCcw, 
+  Calendar as CalendarIcon, 
+  DollarSign, 
+  LogOut,
+  PanelRightOpen,
+  PanelRightClose
+} from 'lucide-react';
 import { AppUser } from '../types/customs';
 
 interface HeaderProps {
@@ -10,6 +23,8 @@ interface HeaderProps {
   currentUser: AppUser;
   pendingCount: number;
   exchangeRate?: number;
+  sidebarMode?: 'expanded' | 'collapsed' | 'hidden';
+  onToggleSidebar?: () => void;
   onOpenExchangeRate?: () => void;
   onOpenSwitchUser: () => void;
   onExportBackup: () => void;
@@ -28,6 +43,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   pendingCount,
   exchangeRate = 1500,
+  sidebarMode = 'expanded',
+  onToggleSidebar,
   onOpenExchangeRate,
   onOpenSwitchUser,
   onExportBackup,
@@ -41,15 +58,43 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Mobile Toggle & Title */}
-        <div className="flex items-center gap-3">
+        {/* Left: Mobile Toggle, Desktop Collapse/Restore Button & Title */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <button
             onClick={onToggleMobileMenu}
             className="lg:hidden p-2 rounded-xl text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
+            title="القائمة"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <h1 className="text-xl font-bold text-white tracking-tight">{pageTitle}</h1>
+
+          {/* Desktop Toggle Button */}
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition text-xs font-bold shadow-xs cursor-pointer ${
+                sidebarMode !== 'expanded'
+                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/40 shadow-emerald-950/30'
+                  : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
+              }`}
+              title={sidebarMode !== 'expanded' ? 'إرجاع الشريط الجانبي (توسيع القائمة)' : 'طي الشريط الجانبي (تصغير)'}
+            >
+              {sidebarMode !== 'expanded' ? (
+                <>
+                  <PanelRightOpen className="w-4 h-4 text-emerald-400" />
+                  <span>إرجاع الشريط الجانبي</span>
+                </>
+              ) : (
+                <>
+                  <PanelRightClose className="w-4 h-4 text-slate-400" />
+                  <span className="hidden xl:inline">طي القائمة</span>
+                </>
+              )}
+            </button>
+          )}
+
+          <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">{pageTitle}</h1>
         </div>
 
         {/* Right: Actions, Search, User */}

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, DollarSign, RefreshCw } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 import { Receipt, Transaction, Customer, Employee, COMPANIES, Currency } from '../../types/customs';
 import { getBillFinancials, getReceiptBreakdownForBill, formatCurrency, normalizeExchangeRate } from '../../utils/storage';
-import { DatePicker } from '../ui/date-picker';
 import { CommissionSection } from '../ui/CommissionSection';
-import { CurrencySelect } from '../ui/currency-select';
+import { ReceiptPartiesCol } from '../receipts/modal/ReceiptPartiesCol';
+import { ReceiptFinancialCol } from '../receipts/modal/ReceiptFinancialCol';
+import { ReceiptLiveReflection } from '../receipts/modal/ReceiptLiveReflection';
+import { ReceiptModalFooter } from '../receipts/modal/ReceiptModalFooter';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -67,7 +69,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       setBillId(defaultBill);
       const tx = transactions.find(t => t.id === defaultBill);
       const initialCurr: Currency = tx?.currency === 'USD' ? 'USD' : 'IQD';
-      // Always prioritize the Control Panel's current exchangeRate (normalized to per-1$)
       const initialRate = normalizeExchangeRate(exchangeRate || tx?.exchangeRate, 1500);
       setCurrency(initialCurr);
       setCustomRate(initialRate);
@@ -100,7 +101,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const fin = currentTx ? getBillFinancials(currentTx, receipts, activeRate) : null;
   const billCurrency: Currency = (fin?.currency === 'USD' ? 'USD' : 'IQD');
 
-  // Live Breakdown of this draft receipt against the bill
   const previewBreakdown = getReceiptBreakdownForBill(
     {
       id: 'preview',
@@ -231,7 +231,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl max-w-3xl lg:max-w-4xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
         
-        {/* Modal Header - Fixed at Top */}
+        {/* Modal Header */}
         <div className="px-5 sm:px-6 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/95 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">
@@ -262,7 +262,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Form - Compact layout without unnecessary scrollbars */}
+        {/* Modal Form */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           
           {/* Form Body */}
@@ -291,215 +291,50 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
             {/* Two Balanced Columns */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              
-              {/* Column 1: Details & Parties */}
-              <div className="space-y-2.5 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/80">
-                <div className="pb-1.5 border-b border-slate-800 text-xs font-bold text-slate-300 flex items-center justify-between">
-                  <span>بيانات السند والأطراف</span>
-                  <span className="text-[10px] text-slate-500">القسم الأول</span>
-                </div>
+              <ReceiptPartiesCol
+                currency={currency}
+                onCurrencySwitch={handleCurrencySwitch}
+                type={type}
+                onTypeChange={(newType) => {
+                  setType(newType);
+                  if (newType === 'payment' && fin) {
+                    setIsAutoRemaining(true);
+                    setAmount(computeRemainingInCurrency(currency, activeRate, fin.remainingAmount));
+                  } else if (newType === 'advance') {
+                    setAmount(currency === 'USD' ? 500 : 1000000);
+                  }
+                }}
+                billId={billId}
+                onBillChange={handleBillChange}
+                transactions={transactions}
+                customers={customers}
+                employees={employees}
+                currentCust={currentCust}
+                employeeId={employeeId}
+                setEmployeeId={setEmployeeId}
+              />
 
-                {/* Currency Selection via Shadcn Select with RTL */}
-                <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
-                  <span className="text-slate-300 font-semibold text-[11px] flex items-center gap-1.5 shrink-0">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>عملة السند:</span>
-                  </span>
-                  <div className="flex-1 max-w-[220px]">
-                    <CurrencySelect
-                      value={currency}
-                      onValueChange={handleCurrencySwitch}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-slate-300 font-semibold mb-1 text-[11px]">نوع السند / الوصل *</label>
-                    <select
-                      value={type}
-                      onChange={(e) => {
-                        const newType = e.target.value as any;
-                        setType(newType);
-                        if (newType === 'payment' && fin) {
-                          setIsAutoRemaining(true);
-                          setAmount(computeRemainingInCurrency(currency, activeRate, fin.remainingAmount));
-                        } else if (newType === 'advance') {
-                          setAmount(currency === 'USD' ? 500 : 1000000);
-                        }
-                      }}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-100 font-bold focus:border-emerald-500 focus:outline-none text-xs"
-                    >
-                      <option value="payment">💳 قبض دفعة زبون</option>
-                      <option value="advance">🏦 صرف سلفة للمخلص</option>
-                      <option value="settlement">✅ تسوية سلفة مخلص</option>
-                    </select>
-                  </div>
-
-                  {type === 'payment' ? (
-                    <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">الزبون المسدد</label>
-                      <input
-                        type="text"
-                        readOnly
-                        value={currentCust?.name || 'اختر البوليصة أولاً'}
-                        className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-2.5 py-1.5 text-slate-400 font-semibold text-xs truncate"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-slate-300 font-semibold mb-1 text-[11px]">المخلص المستلم *</label>
-                      <select
-                        required
-                        value={employeeId}
-                        onChange={(e) => setEmployeeId(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-100 focus:border-emerald-500 focus:outline-none text-xs"
-                      >
-                        <option value="">-- اختر المخلص --</option>
-                        {employees.map(emp => (
-                          <option key={emp.id} value={emp.id}>{emp.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1 text-[11px]">رقم البوليصة المرتبطة *</label>
-                  <select
-                    required
-                    value={billId}
-                    onChange={(e) => handleBillChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 font-mono focus:border-emerald-500 focus:outline-none text-xs"
-                  >
-                    <option value="">-- اختر البوليصة --</option>
-                    {transactions.map(t => {
-                      const c = customers.find(cust => cust.id === t.customerId);
-                      const comp = COMPANIES[t.companyId || 'naqaa_basra'];
-                      return (
-                        <option key={t.id} value={t.id}>
-                          [{comp?.shortName}] {t.billNo} - {c?.name || 'بدون زبون'}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-
-              {/* Column 2: Financials & Notes */}
-              <div className="space-y-2.5 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/80">
-                <div className="pb-1.5 border-b border-slate-800 text-xs font-bold text-slate-300 flex items-center justify-between">
-                  <span>المبلغ والتوثيق المالي</span>
-                  {type === 'payment' && fin && (
-                    <span className="text-[10px] text-slate-400">
-                      المتبقي للبوليصة: <strong className={fin.remainingAmount === 0 ? 'text-emerald-400 font-mono' : 'text-amber-400 font-mono'} dir="ltr">{formatCurrency(fin.remainingAmount, billCurrency)}</strong>
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-slate-300 font-semibold text-[11px]">
-                        المبلغ {currency === 'USD' ? '($)' : '(د.ع)'} *
-                      </label>
-                      {amount > 0 && (
-                        <span className="text-[10px] font-mono font-bold text-emerald-400" dir="ltr">
-                          {currency === 'USD' ? `$${amount.toLocaleString()}` : `${new Intl.NumberFormat('ar-IQ').format(amount)} د.ع`}
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      min="1"
-                      step="any"
-                      required
-                      disabled={isBillFullyPaid}
-                      value={amount === 0 ? '' : amount}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setIsAutoRemaining(false);
-                        setAmount(val === '' ? 0 : Number(val));
-                      }}
-                      className={`w-full bg-slate-950 border rounded-xl px-3 py-1.5 font-mono font-bold focus:outline-none text-xs ${
-                        isPaymentOverRemaining
-                          ? 'border-rose-500 text-rose-400'
-                          : 'border-slate-700 text-emerald-400 focus:border-emerald-500'
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-semibold mb-1 text-[11px]">التاريخ *</label>
-                    <DatePicker
-                      value={date}
-                      onChange={(d) => setDate(d)}
-                      placeholder="اختر تاريخ السند..."
-                    />
-                  </div>
-                </div>
-
-                {/* Cross-Currency Conversion Bar when Receipt Currency != Bill Currency */}
-                {fin && currency !== billCurrency && (
-                  <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-[11px] flex flex-wrap items-center justify-between gap-2 animate-in fade-in">
-                    <div className="flex items-center gap-1.5 text-cyan-300 font-bold">
-                      <RefreshCw className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span>تحويل عملة (1$ أو 100$):</span>
-                      <input
-                        type="number"
-                        min="1"
-                        step="any"
-                        value={customRate === 0 ? '' : customRate}
-                        onChange={(e) => handleRateChange(e.target.value)}
-                        placeholder="1500 أو 150000"
-                        className="w-24 bg-slate-950 border border-cyan-500/50 rounded-lg px-2 py-0.5 text-xs font-mono font-bold text-cyan-300 focus:border-cyan-400 focus:outline-none"
-                      />
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        (1$ = {activeRate.toLocaleString('ar-IQ')} د.ع)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <span>
-                        يعادل من البوليصة:{' '}
-                        <strong className="font-mono text-emerald-400" dir="ltr">
-                          {formatCurrency(previewBreakdown.grossInBillCurrency, billCurrency)}
-                        </strong>
-                      </span>
-                      {type === 'payment' && !isAutoRemaining && fin.remainingAmount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsAutoRemaining(true);
-                            setAmount(computeRemainingInCurrency(currency, activeRate, fin.remainingAmount));
-                          }}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 font-bold transition"
-                          title="حساب مبلغ تسديد كامل المتبقي وفق سعر الصرف المحدد"
-                        >
-                          كامل المتبقي
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {isPaymentOverRemaining && fin && (
-                  <p className="text-[10px] text-rose-400 font-semibold">
-                    ⚠️ الصافي المحتسب للبوليصة ({formatCurrency(previewBreakdown.netCreditInBillCurrency, billCurrency)}) يتجاوز المتبقي ({formatCurrency(fin.remainingAmount, billCurrency)})
-                  </p>
-                )}
-
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1 text-[11px]">ملاحظات السند</label>
-                  <textarea
-                    rows={2}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="مثال: دفعة بموجب إشعار بنكي، سلفة رسوم فحص، تصفية وصولات..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 focus:border-emerald-500 focus:outline-none resize-none text-xs"
-                  />
-                </div>
-              </div>
+              <ReceiptFinancialCol
+                type={type}
+                fin={fin}
+                billCurrency={billCurrency}
+                currency={currency}
+                amount={amount}
+                setAmount={setAmount}
+                setIsAutoRemaining={setIsAutoRemaining}
+                isBillFullyPaid={isBillFullyPaid}
+                isPaymentOverRemaining={isPaymentOverRemaining}
+                date={date}
+                setDate={setDate}
+                customRate={customRate}
+                handleRateChange={handleRateChange}
+                activeRate={activeRate}
+                previewBreakdown={previewBreakdown}
+                isAutoRemaining={isAutoRemaining}
+                computeRemainingInCurrency={computeRemainingInCurrency}
+                notes={notes}
+                setNotes={setNotes}
+              />
             </div>
 
             {/* Compact Commission Section */}
@@ -518,90 +353,34 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               exchangeRate={activeRate}
             />
 
-            {/* Live Financial Reflection Preview on Bill & Cashbox */}
-            {type === 'payment' && fin && amount > 0 && (hasCommission || currency !== billCurrency) && (
-              <div className="px-3 py-2 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">انعكاس الصندوق:</span>
-                  <strong className="font-mono text-emerald-400" dir="ltr">
-                    {hasCommission && commissionBearer === 'company' && commissionAmount > 0
-                      ? commissionCurrency === currency
-                        ? `+${formatCurrency(Math.max(0, amount - commissionAmount), currency)} (صافي بعد استقطاع عمولة الشركة)`
-                        : `+${formatCurrency(amount, currency)} (يُستقطع -${formatCurrency(commissionAmount, commissionCurrency)} عمولة على الشركة)`
-                      : `+${formatCurrency(amount, currency)}${hasCommission && commissionAmount > 0 ? ' (العمولة على الزبون لا تؤثر على الصندوق)' : ''}`}
-                  </strong>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span>
-                    <span className="text-slate-400">يُحتسب للبوليصة (الحوالة): </span>
-                    <strong className="font-mono text-cyan-300" dir="ltr">
-                      {formatCurrency(previewBreakdown.netCreditInBillCurrency, billCurrency)}
-                    </strong>
-                    {hasCommission && commissionAmount > 0 && (
-                      <span className="text-[10px] text-amber-300 mr-1">
-                        ({commissionBearer === 'party' ? 'العمولة على الزبون لا تؤثر على الحوالة' : 'العمولة على الشركة تُستقطع من الدفعة'})
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-slate-700">|</span>
-                  <span>
-                    <span className="text-slate-400">المتبقي الجديد: </span>
-                    <strong className={`font-mono ${newRemainingOnBill === 0 ? 'text-emerald-400' : 'text-amber-400'}`} dir="ltr">
-                      {formatCurrency(newRemainingOnBill, billCurrency)}
-                    </strong>
-                  </span>
-                </div>
-              </div>
-            )}
+            {/* Live Financial Reflection */}
+            <ReceiptLiveReflection
+              type={type}
+              fin={fin}
+              amount={amount}
+              hasCommission={hasCommission}
+              currency={currency}
+              billCurrency={billCurrency}
+              commissionBearer={commissionBearer}
+              commissionAmount={commissionAmount}
+              commissionCurrency={commissionCurrency}
+              previewBreakdown={previewBreakdown}
+              newRemainingOnBill={newRemainingOnBill}
+            />
           </div>
 
-          {/* Footer - Always Fixed and Visible at Bottom */}
-          <div className="px-5 sm:px-6 py-3 bg-slate-950/95 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 z-10">
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span className="flex items-center gap-1">
-                <span className="text-slate-500">المبلغ:</span>
-                <span className="font-mono font-bold text-emerald-400">
-                  {currency === 'USD' ? `$${(amount || 0).toLocaleString()}` : `${new Intl.NumberFormat('ar-IQ').format(amount || 0)} د.ع`}
-                </span>
-              </span>
-              {hasCommission && commissionAmount > 0 && (
-                <>
-                  <span className="text-slate-700">•</span>
-                  <span className="flex items-center gap-1 text-[11px] text-amber-300">
-                    <span>العمولة:</span>
-                    <span className="font-mono font-bold">
-                      {commissionCurrency === 'USD' ? `$${commissionAmount.toLocaleString()}` : `${new Intl.NumberFormat('ar-IQ').format(commissionAmount)} د.ع`}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      ({commissionBearer === 'company' ? 'على الشركة' : 'على الزبون'})
-                    </span>
-                  </span>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition text-xs"
-              >
-                إلغاء
-              </button>
-              <button
-                type="submit"
-                disabled={isBillFullyPaid || isPaymentOverRemaining || amount <= 0}
-                className={`px-5 py-1.5 font-bold rounded-xl transition text-xs flex items-center gap-1.5 ${
-                  isBillFullyPaid || isPaymentOverRemaining || amount <= 0
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-lg shadow-emerald-500/20'
-                }`}
-              >
-                <span>💾</span>
-                <span>حفظ السند</span>
-              </button>
-            </div>
-          </div>
+          {/* Footer */}
+          <ReceiptModalFooter
+            amount={amount}
+            currency={currency}
+            hasCommission={hasCommission}
+            commissionAmount={commissionAmount}
+            commissionCurrency={commissionCurrency}
+            commissionBearer={commissionBearer}
+            onClose={onClose}
+            isBillFullyPaid={isBillFullyPaid}
+            isPaymentOverRemaining={isPaymentOverRemaining}
+          />
         </form>
       </div>
     </div>
